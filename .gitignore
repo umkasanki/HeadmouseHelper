@@ -10,6 +10,11 @@ spike/seize-spike
 spike/seize-verify
 spike/cursor-probe
 
+# Icon build artifacts (source: tools/AppIcon.svg + make-icon.swift; shipped: Resources/AppIcon.icns)
+tools/make-icon
+tools/icon_1024.png
+tools/AppIcon.iconset/
+
 # macOS
 .DS_Store
 *.o

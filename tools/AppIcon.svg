@@ -1,0 +1,37 @@
+<svg width="1024" height="1024" viewBox="0 0 1024 1024" xmlns="http://www.w3.org/2000/svg">
+  <!-- HeadmouseHelper app icon — emerald squircle + white "tracker" glyph: a
+       rounded rectangle with a big centered circle and two small top-corner
+       circles knocked out (same motif as the menu-bar icon). Matches the
+       ally-clicker / ally-keyboard house style (squircle + sheen + soft glyph
+       shadow). tools/make-icon.swift reproduces this in CoreGraphics for
+       rasterizing. Drawn in a 200-unit y-down space mapped onto an 832 body
+       inset 96px in the 1024 canvas. -->
+  <defs>
+    <linearGradient id="tile" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#34D399"/><stop offset="1" stop-color="#059669"/>
+    </linearGradient>
+    <linearGradient id="sheen" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ffffff" stop-opacity="0.35"/><stop offset="0.5" stop-color="#ffffff" stop-opacity="0"/>
+    </linearGradient>
+    <linearGradient id="glyph" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#ffffff"/><stop offset="1" stop-color="#BFEDDB"/>
+    </linearGradient>
+    <filter id="soft" x="-50%" y="-50%" width="200%" height="200%">
+      <feDropShadow dx="0" dy="6" stdDeviation="9" flood-color="#023d29" flood-opacity="0.45"/>
+    </filter>
+    <mask id="holes">
+      <rect x="30" y="50" width="140" height="100" rx="18" fill="#fff"/>
+      <circle cx="100" cy="100" r="40" fill="#000"/>
+      <circle cx="46" cy="66" r="8" fill="#000"/>
+      <circle cx="154" cy="66" r="8" fill="#000"/>
+    </mask>
+  </defs>
+
+  <g transform="translate(96,96) scale(4.16)">
+    <rect width="200" height="200" rx="46" fill="url(#tile)"/>
+    <rect width="200" height="200" rx="46" fill="url(#sheen)"/>
+    <g filter="url(#soft)">
+      <rect width="200" height="200" fill="url(#glyph)" mask="url(#holes)"/>
+    </g>
+  </g>
+</svg>
