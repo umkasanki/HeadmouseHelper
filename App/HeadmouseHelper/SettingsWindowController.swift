@@ -16,9 +16,11 @@ private final class PanelWindow: NSWindow {
 }
 
 /// A standard titled window (with the real system traffic lights) hosting the
-/// control UI. Minimize and zoom are natively disabled — only close is active.
-/// Auto-closes when the user clicks outside it (like a popover).
-final class SettingsWindowController: NSObject, NSWindowDelegate {
+/// control UI. Only close is active (minimize/zoom are disabled — a menu-bar app
+/// has no Dock tile to minimize into). It floats above other windows and stays
+/// open when the user clicks elsewhere; it's closed with the red button and
+/// reopened from the menu-bar icon's menu.
+final class SettingsWindowController {
     private let window: PanelWindow
 
     init(controller: TrackingController) {
@@ -29,32 +31,30 @@ final class SettingsWindowController: NSObject, NSWindowDelegate {
             backing: .buffered,
             defer: false
         )
-        super.init()
-
         window.contentViewController = hosting
         window.title = "HeadmouseHelper"
         window.titleVisibility = .hidden
         window.titlebarAppearsTransparent = true
         window.isMovableByWindowBackground = true
         window.isReleasedWhenClosed = false
-        window.level = .floating
-        window.delegate = self
 
-        // Standard way to show "blocked" secondary buttons: disable them so the
-        // system greys them out (a window that can't minimize or zoom).
+        // Stay visible on top when another app (or the desktop) is clicked.
+        window.level = .floating
+        window.hidesOnDeactivate = false
+        window.collectionBehavior = [.canJoinAllSpaces, .stationary, .fullScreenAuxiliary]
+
         window.standardWindowButton(.miniaturizeButton)?.isEnabled = false
         window.standardWindowButton(.zoomButton)?.isEnabled = false
     }
 
     func show(from statusButton: NSStatusBarButton?) {
-        positionBelow(statusButton)
+        // Keep a user-moved position if it's already open; otherwise drop it
+        // under the menu-bar icon.
+        if !window.isVisible {
+            positionBelow(statusButton)
+        }
         NSApp.activate(ignoringOtherApps: true)
         window.makeKeyAndOrderFront(nil)
-    }
-
-    /// Auto-close when the user clicks outside the window (it lost key focus).
-    func windowDidResignKey(_ notification: Notification) {
-        window.close()
     }
 
     private func positionBelow(_ statusButton: NSStatusBarButton?) {
