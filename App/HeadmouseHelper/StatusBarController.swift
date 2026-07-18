@@ -14,17 +14,55 @@ final class StatusBarController {
         item = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
 
         if let button = item.button {
-            button.action = #selector(toggleWindow)
+            button.action = #selector(handleClick)
             button.target = self
+            button.sendAction(on: [.leftMouseUp, .rightMouseUp])
         }
 
         controller.observe { [weak self] in self?.refreshIcon() }
         refreshIcon()
     }
 
-    @objc private func toggleWindow() {
-        settingsWindow.toggle(from: item.button)
+    /// Left click toggles tracking; right (or ctrl) click shows the menu.
+    @objc private func handleClick() {
+        let event = NSApp.currentEvent
+        if event?.type == .rightMouseUp || event?.modifierFlags.contains(.control) == true {
+            showMenu()
+        } else if controller.status != .noDevice {
+            controller.toggle()
+        }
     }
+
+    private func showMenu() {
+        let menu = NSMenu()
+        menu.autoenablesItems = false
+
+        let toggle = NSMenuItem(
+            title: controller.status == .tracking ? "Stop tracking" : "Start tracking",
+            action: #selector(menuToggle), keyEquivalent: ""
+        )
+        toggle.target = self
+        toggle.isEnabled = controller.status != .noDevice
+        menu.addItem(toggle)
+
+        let settings = NSMenuItem(title: "Settings…", action: #selector(menuSettings), keyEquivalent: ",")
+        settings.target = self
+        menu.addItem(settings)
+
+        menu.addItem(.separator())
+
+        let quit = NSMenuItem(title: "Quit HeadmouseHelper", action: #selector(menuQuit), keyEquivalent: "q")
+        quit.target = self
+        menu.addItem(quit)
+
+        if let button = item.button {
+            menu.popUp(positioning: nil, at: NSPoint(x: 0, y: button.bounds.height + 4), in: button)
+        }
+    }
+
+    @objc private func menuToggle() { controller.toggle() }
+    @objc private func menuSettings() { settingsWindow.show(from: item.button) }
+    @objc private func menuQuit() { NSApp.terminate(nil) }
 
     private func refreshIcon() {
         guard let button = item.button else { return }

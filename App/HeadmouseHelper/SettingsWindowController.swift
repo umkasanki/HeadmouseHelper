@@ -17,8 +17,8 @@ private final class PanelWindow: NSWindow {
 
 /// A standard titled window (with the real system traffic lights) hosting the
 /// control UI. Minimize and zoom are natively disabled — only close is active.
-/// Floats above other windows and stays put when the desktop is clicked.
-final class SettingsWindowController {
+/// Auto-closes when the user clicks outside it (like a popover).
+final class SettingsWindowController: NSObject, NSWindowDelegate {
     private let window: PanelWindow
 
     init(controller: TrackingController) {
@@ -29,20 +29,16 @@ final class SettingsWindowController {
             backing: .buffered,
             defer: false
         )
+        super.init()
+
         window.contentViewController = hosting
         window.title = "HeadmouseHelper"
         window.titleVisibility = .hidden
         window.titlebarAppearsTransparent = true
         window.isMovableByWindowBackground = true
         window.isReleasedWhenClosed = false
-
-        // Stay visible when another app (or the desktop) is clicked. A plain
-        // floating window of a background (accessory) app is still pulled off
-        // screen on deactivation; canJoinAllSpaces + stationary detaches it from
-        // the active-app context so it stays put.
         window.level = .floating
-        window.hidesOnDeactivate = false
-        window.collectionBehavior = [.canJoinAllSpaces, .stationary, .fullScreenAuxiliary]
+        window.delegate = self
 
         // Standard way to show "blocked" secondary buttons: disable them so the
         // system greys them out (a window that can't minimize or zoom).
@@ -50,14 +46,15 @@ final class SettingsWindowController {
         window.standardWindowButton(.zoomButton)?.isEnabled = false
     }
 
-    func toggle(from statusButton: NSStatusBarButton?) {
-        if window.isVisible {
-            window.close()
-            return
-        }
+    func show(from statusButton: NSStatusBarButton?) {
         positionBelow(statusButton)
         NSApp.activate(ignoringOtherApps: true)
         window.makeKeyAndOrderFront(nil)
+    }
+
+    /// Auto-close when the user clicks outside the window (it lost key focus).
+    func windowDidResignKey(_ notification: Notification) {
+        window.close()
     }
 
     private func positionBelow(_ statusButton: NSStatusBarButton?) {
