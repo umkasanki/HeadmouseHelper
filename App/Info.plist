@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+    <key>CFBundleName</key>
+    <string>HeadmouseHelper</string>
+    <key>CFBundleDisplayName</key>
+    <string>HeadmouseHelper</string>
+    <key>CFBundleIdentifier</key>
+    <string>com.umkasanki.headmousehelper</string>
+    <key>CFBundleExecutable</key>
+    <string>HeadmouseHelper</string>
+    <key>CFBundlePackageType</key>
+    <string>APPL</string>
+    <key>CFBundleShortVersionString</key>
+    <string>0.1.0</string>
+    <key>CFBundleVersion</key>
+    <string>1</string>
+    <key>LSMinimumSystemVersion</key>
+    <string>14.0</string>
+    <!-- Menu-bar / accessory app: no Dock icon, no main window. -->
+    <key>LSUIElement</key>
+    <true/>
+    <!-- Shown if macOS ever prompts for HID input access when seizing a device. -->
+    <key>NSInputMonitoringUsageDescription</key>
+    <string>HeadmouseHelper needs input access to enable and disable your head-tracking mouse.</string>
+    <key>NSHumanReadableCopyright</key>
+    <string>© 2026 Oleg Tishkin</string>
+</dict>
+</plist>
