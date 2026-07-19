@@ -1,0 +1,6 @@
+{
+  "enabled": true,
+  "algorithm": "hybrid",
+  "strength": 0.5,
+  "deadzone": 0.1
+}

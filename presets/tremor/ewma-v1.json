@@ -1,0 +1,6 @@
+{
+  "enabled": true,
+  "algorithm": "ewma",
+  "strength": 0.6,
+  "deadzone": 0.1
+}

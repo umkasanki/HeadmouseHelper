@@ -50,6 +50,43 @@ final class TremorFilterTests: XCTestCase {
     func testTremorSettingsResilientDecode() throws {
         let s = try JSONDecoder().decode(TremorSettings.self, from: #"{"enabled": true}"#.data(using: .utf8)!)
         XCTAssertTrue(s.enabled)
+        XCTAssertEqual(s.algorithm, .angleMouse, "missing algorithm takes default")
         XCTAssertEqual(s.strength, 0.5, accuracy: 1e-9, "missing key takes default")
+    }
+
+    // MARK: - Speed algorithm
+
+    func testSpeedDampsSlowMovement() {
+        let f = TremorFilter()
+        f.configure(TremorSettings(enabled: true, algorithm: .speed, strength: 0.5))
+        let out = f.process(dx: 1, dy: 0, dt: 0.1)   // 10 px/s → slow
+        XCTAssertLessThan(out.dx, 1, "slow movement is damped")
+    }
+
+    func testSpeedPassesFastMovement() {
+        let f = TremorFilter()
+        f.configure(TremorSettings(enabled: true, algorithm: .speed, strength: 0.5))
+        let out = f.process(dx: 100, dy: 0, dt: 0.1)  // 1000 px/s → fast
+        XCTAssertEqual(out.dx, 100, accuracy: 0.01, "fast movement passes through")
+    }
+
+    // MARK: - EWMA algorithm
+
+    func testEwmaDampsJitter() {
+        let f = TremorFilter()
+        f.configure(TremorSettings(enabled: true, algorithm: .ewma, strength: 0.8))
+        var last = 0.0
+        for i in 0 ..< 40 { last = f.process(dx: i.isMultiple(of: 2) ? 10 : -10, dy: 0, dt: 0.008).dx }
+        XCTAssertLessThan(abs(last), 5, "EWMA averages out alternating jitter")
+    }
+
+    // MARK: - Hybrid algorithm
+
+    func testHybridPassesFastEvenIfJittery() {
+        let f = TremorFilter()
+        f.configure(TremorSettings(enabled: true, algorithm: .hybrid, strength: 0.5))
+        var out = (dx: 0.0, dy: 0.0)
+        for i in 0 ..< 20 { out = f.process(dx: i.isMultiple(of: 2) ? 100 : -100, dy: 0, dt: 0.05) }
+        XCTAssertEqual(abs(out.dx), 100, accuracy: 0.01, "fast movement passes even when jittery")
     }
 }

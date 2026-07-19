@@ -2,10 +2,17 @@ import Foundation
 
 /// Which tremor-stabilization algorithm to use. Kept as a setting so different
 /// approaches can be A/B compared via presets.
-public enum TremorAlgorithm: String, Codable {
-    /// Angle Mouse (Wobbrock, CHI 2009): gain from angular deviation of the path.
+public enum TremorAlgorithm: String, Codable, CaseIterable {
+    /// Angle Mouse (Wobbrock, CHI 2009): gain from angular deviation of the path
+    /// (straight = deliberate = full gain; jittery = tremor = damped).
     case angleMouse
-    // Future: case speed, hybrid
+    /// Speed-based gain (slow = damped, fast = full gain).
+    case speed
+    /// Exponential moving average — a low-pass smoother (classic anti-tremor).
+    case ewma
+    /// Angle + speed: full gain if the path is straight OR fast; damps only slow
+    /// AND jittery movement (the signature of tremor).
+    case hybrid
 }
 
 /// Settings for tremor stabilization (the Stabilization tab). Applied by an
