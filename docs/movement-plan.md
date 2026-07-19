@@ -73,28 +73,53 @@ range (device default ≈ 0.6875). "Restore defaults" = app defaults, not macOS'
 
 ---
 
-## Part 2 — Tremor stabilization  (day 2)
+## Part 2 — Tremor stabilization
 
-Ends with: a Tremor section that visibly smooths head jitter while keeping
-deliberate movement responsive; trackpad unaffected.
+Goal: a **Stabilization** tab (the 3rd tab, alongside Control and Movement) that
+smooths head jitter while keeping deliberate movement responsive; the trackpad is
+unaffected. Delivered via a `CGEventTap` that edits mouse-move `deltaX/deltaY`
+**in place** (no re-inject) using opentrack's **accela** filter (ISC — credit in
+NOTICES.md). Big block, so split across days; each sub-part ends with a commit.
 
-- [ ] **Spike.** Minimal `CGEventTap` that halves `mouseMoved` deltas to prove
-      in-place modification + the Accessibility permission flow works.
-- [ ] **Core — filter.** Port the **accela** algorithm as a pure, testable
-      `TremorFilter` (2D): per-axis delta vs last output, dead zone, nonlinear
-      gain via the ported gain-curve points, integrate over dt. Unit tests:
-      micro-jitter → ~0 output, large motion → passes ~1:1, dead zone respected.
-      Credit opentrack / S. Halik (ISC).
-- [ ] **Core — model.** `MovementSettings +=`
-      `tremor { enabled: Bool, smoothing, deadzone }`.
+Tab structure after this: **Control · Movement · Stabilization**.
+
+### Part 2a — De-risk + filter core  (day)
+
+Ends with: proof the event-tap path works, and a tested pure filter — no UI yet.
+
+- [ ] **Spike.** Minimal `CGEventTap` that halves `mouseMoved` deltas in place, to
+      prove in-place editing works and to walk through the **Accessibility**
+      permission flow (grant + relaunch). Run over SSH/GUI on the Mac.
+- [ ] **Core — filter.** Port **accela** as a pure, testable `TremorFilter` (2D):
+      per-axis delta vs last output, dead zone, nonlinear gain via the ported
+      gain-curve points, integrate over dt. Unit tests: micro-jitter → ~0, large
+      motion → passes ~1:1, dead zone respected. Credit opentrack / S. Halik (ISC).
+- [ ] **Core — model.** `MovementSettings +=` `tremor { enabled, smoothing,
+      deadzone }` (resilient decode + defaults + tests).
+- [ ] **Commit.**
+
+### Part 2b — Event-tap wiring + permission  (day)
+
+Ends with: enabling tremor (via the setting) actually smooths the cursor on device.
+
 - [ ] **App — event tap.** `EventTapFilter` — `CGEventTap` on
       `mouseMoved`/`leftMouseDragged`/`rightMouseDragged`; run deltas through
       `TremorFilter`; write back `kCGMouseEventDeltaX/Y`. Start/stop per setting.
-- [ ] **Permission.** Request **Accessibility** at launch (only when tremor is
-      enabled); add `NSAccessibilityUsageDescription` to `Info.plist`.
-- [ ] **UI.** Movement tab += Tremor section (toggle + smoothing + dead-zone).
-- [ ] **Verify on device:** head tremor smoothed, deliberate motion responsive
-      and lag-free, trackpad normal.
+- [ ] **Permission.** Request **Accessibility** (only when tremor is enabled);
+      add `NSAccessibilityUsageDescription` to `Info.plist`; handle grant +
+      relaunch (stable signing already persists it).
+- [ ] **Wire.** Enable/disable the tap from the tremor setting; reassert as needed.
+- [ ] **Verify on device (rough):** enabling tremor visibly smooths jitter.
+- [ ] **Commit.**
+
+### Part 2c — Stabilization tab + tuning  (day)
+
+Ends with: a polished Stabilization tab, tuned on the real device.
+
+- [ ] **UI.** 3rd tab **Stabilization**: enable toggle + smoothing + dead-zone
+      (`StepperSlider`), live-apply.
+- [ ] **Verify on device:** head tremor smoothed, deliberate motion responsive and
+      lag-free, trackpad normal; tune the gain curve / defaults by feel.
 - [ ] **Commit.** Update `NOTICES.md` (opentrack ISC).
 
 ---
