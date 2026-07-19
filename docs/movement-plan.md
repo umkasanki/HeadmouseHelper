@@ -83,20 +83,25 @@ NOTICES.md). Big block, so split across days; each sub-part ends with a commit.
 
 Tab structure after this: **Control · Movement · Stabilization**.
 
-### Part 2a — De-risk + filter core  (day)
+### Part 2a — Filter core  (done)
 
-Ends with: proof the event-tap path works, and a tested pure filter — no UI yet.
+Ends with: a tested pure filter + model — no UI yet.
 
-- [ ] **Spike.** Minimal `CGEventTap` that halves `mouseMoved` deltas in place, to
-      prove in-place editing works and to walk through the **Accessibility**
-      permission flow (grant + relaunch). Run over SSH/GUI on the Mac.
-- [ ] **Core — filter.** Port **accela** as a pure, testable `TremorFilter` (2D):
-      per-axis delta vs last output, dead zone, nonlinear gain via the ported
-      gain-curve points, integrate over dt. Unit tests: micro-jitter → ~0, large
-      motion → passes ~1:1, dead zone respected. Credit opentrack / S. Halik (ISC).
-- [ ] **Core — model.** `MovementSettings +=` `tremor { enabled, smoothing,
-      deadzone }` (resilient decode + defaults + tests).
-- [ ] **Commit.**
+- [x] **Core — filter.** Ported **accela** as a pure, testable `TremorFilter`
+      (`Sources/HeadmouseCore/TremorFilter.swift`): accumulate raw target, ease a
+      smoothed output toward it, dead zone, nonlinear piecewise-linear gain curve
+      (opentrack pos_gains), integrate over dt. 7 unit tests (jitter suppressed,
+      sustained motion passes, monotonic, reset). Credit opentrack / S. Halik (ISC).
+- [x] **Core — model.** `TremorSettings { enabled, smoothing, deadzone }` as a
+      top-level `Settings.tremor` (separate from Movement — it's its own tab),
+      resilient decode + defaults.
+- [x] **Commit.**
+
+Note: the event-tap **spike is folded into Part 2b** — a standalone CGEventTap CLI
+hits the same TCC friction as Input Monitoring (needs Accessibility granted to a
+throwaway binary that resets on rebuild), so we de-risk the tap inside the app,
+where stable signing persists the grant. Also: the accela gain curve was tuned for
+head-tracking degrees; pixel-scale tuning happens on-device in Part 2c.
 
 ### Part 2b — Event-tap wiring + permission  (day)
 
