@@ -21,6 +21,7 @@ swiftc \
     -framework AppKit \
     -framework SwiftUI \
     -framework IOKit \
+    -import-objc-header App/HeadmouseHelper/IOKitSPI.h \
     -I .build/debug/Modules \
     $(find App/HeadmouseHelper -name "*.swift") \
     .build/debug/HeadmouseCore.build/*.o \

@@ -12,13 +12,15 @@ public final class TrackingController {
 
     private let seizer: HeadMouseSeizing
     private let store: SettingsStore
+    private let tuner: PointerTuning?
     public private(set) var settings: Settings
 
     private var observers: [() -> Void] = []
 
-    public init(seizer: HeadMouseSeizing, store: SettingsStore) {
+    public init(seizer: HeadMouseSeizing, store: SettingsStore, tuner: PointerTuning? = nil) {
         self.seizer = seizer
         self.store = store
+        self.tuner = tuner
         self.settings = store.load()
         self.seizer.onDevicesChanged = { [weak self] in self?.apply() }
         apply()
@@ -70,6 +72,17 @@ public final class TrackingController {
 
     public func toggle() { setTracking(!settings.trackingEnabled) }
 
+    public var movement: MovementSettings { settings.movement }
+
+    public func updateMovement(_ movement: MovementSettings) {
+        settings.movement = movement
+        store.save(settings)
+        apply()
+    }
+
+    /// Re-assert movement tuning (e.g. after wake, when macOS resets device props).
+    public func reapplyTuning() { apply() }
+
     // MARK: - Enforcement
 
     /// Make the hardware match the desired state. Idempotent: release
@@ -77,8 +90,12 @@ public final class TrackingController {
     /// on every state change and on device hotplug (so a replug re-seizes).
     private func apply() {
         seizer.releaseAll()
-        if let device = activeDevice, settings.trackingEnabled == false {
-            seizer.seize(device)
+        if let device = activeDevice {
+            if settings.trackingEnabled {
+                tuner?.apply(settings.movement, to: device)
+            } else {
+                seizer.seize(device)
+            }
         }
         notify()
     }

@@ -21,6 +21,13 @@ private final class FakeSeizer: HeadMouseSeizing {
     }
 }
 
+private final class FakeTuner: PointerTuning {
+    private(set) var applied: [(movement: MovementSettings, device: HidDevice)] = []
+    func apply(_ movement: MovementSettings, to device: HidDevice) {
+        applied.append((movement, device))
+    }
+}
+
 final class TrackingControllerTests: XCTestCase {
     private let head = HidDevice(vendorID: 0x0A95, productID: 0x0003, name: "HeadMouse Nano")
 
@@ -87,5 +94,36 @@ final class TrackingControllerTests: XCTestCase {
         c.observe { count += 1 }
         c.toggle()
         XCTAssertGreaterThan(count, 0)
+    }
+
+    func testMovementAppliedWhileTracking() {
+        let seizer = FakeSeizer(available: [head])
+        let tuner = FakeTuner()
+        _ = TrackingController(seizer: seizer, store: makeStore(), tuner: tuner)
+        XCTAssertEqual(tuner.applied.last?.device, head, "tuning applied to the device while tracking")
+        XCTAssertTrue(seizer.seized.isEmpty)
+    }
+
+    func testMovementNotAppliedWhileStopped() {
+        let seizer = FakeSeizer(available: [head])
+        let tuner = FakeTuner()
+        let c = TrackingController(seizer: seizer, store: makeStore(), tuner: tuner)
+        let before = tuner.applied.count
+        c.setTracking(false)
+        XCTAssertEqual(tuner.applied.count, before, "no tuning while seized")
+        XCTAssertTrue(seizer.seized.contains(head.id))
+    }
+
+    func testUpdateMovementPersistsAndApplies() {
+        let store = makeStore()
+        let tuner = FakeTuner()
+        let c = TrackingController(seizer: FakeSeizer(available: [head]), store: store, tuner: tuner)
+        var m = c.movement
+        m.speed = 0.9
+        c.updateMovement(m)
+        XCTAssertEqual(tuner.applied.last?.movement.speed ?? -1, 0.9, accuracy: 0.001)
+
+        let reloaded = TrackingController(seizer: FakeSeizer(available: [head]), store: store)
+        XCTAssertEqual(reloaded.movement.speed, 0.9, accuracy: 0.001)
     }
 }

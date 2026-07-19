@@ -15,19 +15,22 @@ public struct Settings: Codable, Equatable {
 
     public var launchAtLogin: Bool
     public var notifyOnChange: Bool
+    public var movement: MovementSettings
 
     public init(
         trackingEnabled: Bool = true,
         selectedVendorID: Int? = nil,
         selectedProductID: Int? = nil,
         launchAtLogin: Bool = false,
-        notifyOnChange: Bool = true
+        notifyOnChange: Bool = true,
+        movement: MovementSettings = MovementSettings()
     ) {
         self.trackingEnabled = trackingEnabled
         self.selectedVendorID = selectedVendorID
         self.selectedProductID = selectedProductID
         self.launchAtLogin = launchAtLogin
         self.notifyOnChange = notifyOnChange
+        self.movement = movement
     }
 
     public init(from decoder: Decoder) throws {
@@ -38,6 +41,7 @@ public struct Settings: Codable, Equatable {
         selectedProductID = try c.decodeIfPresent(Int.self, forKey: .selectedProductID) ?? d.selectedProductID
         launchAtLogin = try c.decodeIfPresent(Bool.self, forKey: .launchAtLogin) ?? d.launchAtLogin
         notifyOnChange = try c.decodeIfPresent(Bool.self, forKey: .notifyOnChange) ?? d.notifyOnChange
+        movement = try c.decodeIfPresent(MovementSettings.self, forKey: .movement) ?? d.movement
     }
 
     func jsonData() throws -> Data {

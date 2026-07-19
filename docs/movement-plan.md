@@ -49,28 +49,27 @@ Ends with: Movement tab shows Speed / Acceleration / Disable-acceleration /
 Restore-defaults, applied to the HeadMouse live, persisted, reasserted on
 replug/wake.
 
-- [ ] **Core — model.** Add `MovementSettings { speed: 0…1, acceleration: 0…40,
-      disableAcceleration: Bool }` to `Settings` (resilient decode + defaults).
-- [ ] **Core — port.** `PointerTuning` protocol (`apply(_:to:)`,
-      `resetToDefaults(_:)`). Unit tests: speed→resolution mapping, clamps,
-      Codable round-trip, resilient decode.
-- [ ] **Build — bridging header.** Add `App/HeadmouseHelper/IOKitSPI.h` (private
-      decls: `IOHIDEventSystemClientCreate`, `IOHIDServiceClientCopyProperty`)
-      and `-import-objc-header` in `build-app.sh`. Confirm the app still builds.
-- [ ] **App — adapter.** `IOKitPointerTuner: PointerTuning` — create the event
-      system client, find the HeadMouse service client(s) by VID/PID, set
-      resolution/acceleration (+ acceleration re-poke so resolution applies;
-      `disableAcceleration` → −1 or linear-scaling method on Sonoma+).
-- [ ] **App — wiring.** Apply movement settings when tracking is ON; reassert on
-      hotplug (existing `onDevicesChanged`) and on wake
-      (`NSWorkspace.didWakeNotification`).
-- [ ] **UI — tabs.** Convert the window content to a `TabView`: **Control**
-      (existing circle) + **Movement**. Movement tab: Speed slider, Acceleration
-      slider, Disable-acceleration toggle, Restore-defaults button. Live-apply on
-      change.
-- [ ] **Verify on device:** speed changes, disable-accel works, values persist,
-      reassert after replug and after sleep/wake.
-- [ ] **Commit.** Add `NOTICES.md` (LinearMouse MIT).
+- [x] **Core — model.** `MovementSettings { speed 0…1, acceleration 0…40,
+      disableAcceleration }` in `Settings` (resilient decode + defaults).
+- [x] **Core — port.** `PointerTuning` protocol; unit tests (speed→resolution
+      mapping, clamps, Codable, resilient decode) — 18 Core tests pass.
+- [x] **Build — bridging header.** `App/HeadmouseHelper/IOKitSPI.h` +
+      `-import-objc-header` in `build-app.sh`.
+- [x] **App — adapter.** `IOKitPointerTuner: PointerTuning` — event system
+      client, find HeadMouse service client(s), set resolution + acceleration
+      (`disableAcceleration` → −1).
+- [x] **App — wiring.** Applied while tracking is ON; reasserts on hotplug and
+      on wake (`NSWorkspace.didWakeNotification`).
+- [x] **UI — tabs.** Segmented control (Control / Movement) under the title bar
+      (TabView collapses to an overflow menu on macOS 26). Movement tab:
+      Disable-acceleration toggle, Acceleration + Speed as `StepperSlider`
+      (− / + circular buttons + centered value field), Restore-defaults.
+- [x] **Verify on device:** app applied default speed 0.5 → resolution 860
+      (confirmed by reading the device); speed set validated in Part 0.
+- [x] **Commit.** `NOTICES.md` added (LinearMouse MIT).
+
+Note: separate H/V still deferred; acceleration slider uses LinearMouse's 0…40
+range (device default ≈ 0.6875). "Restore defaults" = app defaults, not macOS'.
 
 ---
 

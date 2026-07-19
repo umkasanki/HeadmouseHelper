@@ -16,14 +16,46 @@ final class SettingsModel: ObservableObject {
     var status: TrackingController.Status { controller.status }
     var deviceName: String { controller.activeDevice?.name ?? "No tracker connected" }
     var canToggle: Bool { status != .noDevice }
-
     func toggle() { controller.toggle() }
+
+    var movement: MovementSettings { controller.movement }
+    func updateMovement(_ movement: MovementSettings) { controller.updateMovement(movement) }
 }
 
-/// The window's content: a big circular Stop/Start button, with the connected
-/// tracker's name and a green/red status dot beneath it. The window chrome
-/// (title bar + system traffic lights) is provided by AppKit, not drawn here.
+/// The window's content: Control (big Stop/Start circle) + Movement (tuning) tabs.
+/// Window chrome (title bar + system traffic lights) is provided by AppKit.
 struct SettingsView: View {
+    @ObservedObject var model: SettingsModel
+    @State private var tab = 0
+
+    var body: some View {
+        VStack(spacing: 0) {
+            // A segmented control (not TabView) — centered under the title bar,
+            // stable across macOS versions (TabView collapses to an overflow
+            // menu on macOS 26).
+            Picker("", selection: $tab) {
+                Text("Control").tag(0)
+                Text("Movement").tag(1)
+            }
+            .pickerStyle(.segmented)
+            .labelsHidden()
+            .frame(width: 220)
+            .padding(.top, 10)
+            .padding(.bottom, 8)
+
+            Divider()
+
+            if tab == 0 {
+                ControlTab(model: model)
+            } else {
+                MovementTab(model: model)
+            }
+        }
+        .frame(width: 300)
+    }
+}
+
+private struct ControlTab: View {
     @ObservedObject var model: SettingsModel
 
     var body: some View {
@@ -31,7 +63,7 @@ struct SettingsView: View {
             Button(action: model.toggle) {
                 ZStack {
                     Circle()
-                        .strokeBorder(ringColor, lineWidth: 4)
+                        .strokeBorder(.secondary, lineWidth: 4)
                         .frame(width: 150, height: 150)
                     Text(circleTitle)
                         .font(.system(size: 19, weight: .semibold))
@@ -53,10 +85,7 @@ struct SettingsView: View {
                     .truncationMode(.middle)
             }
         }
-        .padding(.horizontal, 24)
-        .padding(.bottom, 24)
-        .padding(.top, 8)
-        .frame(width: 260)
+        .padding(20)
     }
 
     private var circleTitle: String {
@@ -67,15 +96,88 @@ struct SettingsView: View {
         }
     }
 
-    /// Neutral ring colour — the toggle circle itself is not state-coloured.
-    private var ringColor: Color { .secondary }
-
-    /// The small status dot beside the device name keeps the state colour.
     private var stateColor: Color {
         switch model.status {
         case .tracking: return .green
         case .stopped: return .red
         case .noDevice: return .secondary
         }
+    }
+}
+
+private struct MovementTab: View {
+    @ObservedObject var model: SettingsModel
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 18) {
+            Toggle("Disable acceleration", isOn: disableAcceleration)
+
+            StepperSlider(title: "Acceleration", value: acceleration, range: 0 ... 40, step: 1)
+                .disabled(model.movement.disableAcceleration)
+                .opacity(model.movement.disableAcceleration ? 0.4 : 1)
+
+            StepperSlider(title: "Speed", value: speed, range: 0 ... 1, step: 0.05)
+
+            Button("Restore defaults") { model.updateMovement(MovementSettings()) }
+                .frame(maxWidth: .infinity, alignment: .center)
+        }
+        .padding(20)
+    }
+
+    private var speed: Binding<Double> {
+        Binding(get: { model.movement.speed },
+                set: { var m = model.movement; m.speed = $0; model.updateMovement(m) })
+    }
+    private var acceleration: Binding<Double> {
+        Binding(get: { model.movement.acceleration },
+                set: { var m = model.movement; m.acceleration = $0; model.updateMovement(m) })
+    }
+    private var disableAcceleration: Binding<Bool> {
+        Binding(get: { model.movement.disableAcceleration },
+                set: { var m = model.movement; m.disableAcceleration = $0; model.updateMovement(m) })
+    }
+}
+
+/// A labelled slider flanked by − / + step buttons, with a numeric entry field
+/// centered below it. All inputs are clamped to `range`.
+private struct StepperSlider: View {
+    let title: String
+    @Binding var value: Double
+    let range: ClosedRange<Double>
+    let step: Double
+    var decimals: Int = 2
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(title).font(.subheadline)
+            HStack(spacing: 8) {
+                Button { set(value - step) } label: {
+                    Image(systemName: "minus.circle.fill").font(.system(size: 18))
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(.secondary)
+
+                Slider(value: clamped, in: range)
+
+                Button { set(value + step) } label: {
+                    Image(systemName: "plus.circle.fill").font(.system(size: 18))
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(.secondary)
+            }
+            TextField("", value: clamped, format: .number.precision(.fractionLength(0 ... decimals)))
+                .textFieldStyle(.roundedBorder)
+                .multilineTextAlignment(.center)
+                .frame(width: 72)
+                .frame(maxWidth: .infinity, alignment: .center)
+        }
+    }
+
+    private var clamped: Binding<Double> {
+        Binding(get: { value }, set: { set($0) })
+    }
+
+    private func set(_ newValue: Double) {
+        value = min(max(newValue, range.lowerBound), range.upperBound)
     }
 }

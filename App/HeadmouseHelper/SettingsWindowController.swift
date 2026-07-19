@@ -33,8 +33,9 @@ final class SettingsWindowController {
         )
         window.contentViewController = hosting
         window.title = "HeadmouseHelper"
-        window.titleVisibility = .hidden
-        window.titlebarAppearsTransparent = true
+        // Standard title bar (traffic lights on it, title centered) with the tab
+        // bar in the content area below it — like a normal Settings window.
+        window.titleVisibility = .visible
         window.isMovableByWindowBackground = true
         window.isReleasedWhenClosed = false
 
