@@ -3,11 +3,11 @@ import XCTest
 
 final class MovementSettingsTests: XCTestCase {
     func testResolutionMapping() {
-        // Exponential map: slow=1600 at speed 0, fast=120 at speed 1,
-        // geometric mid ≈ 438 at speed 0.5.
+        // Exponential map: slow=1600 at speed 0, fast=40 at speed 1,
+        // geometric mid ≈ 253 at speed 0.5.
         XCTAssertEqual(MovementSettings(speed: 0).pointerResolution, 1600, accuracy: 0.001)
-        XCTAssertEqual(MovementSettings(speed: 1).pointerResolution, 120, accuracy: 0.001)
-        XCTAssertEqual(MovementSettings(speed: 0.5).pointerResolution, 438.18, accuracy: 0.5)
+        XCTAssertEqual(MovementSettings(speed: 1).pointerResolution, 40, accuracy: 0.001)
+        XCTAssertEqual(MovementSettings(speed: 0.5).pointerResolution, 252.98, accuracy: 0.5)
     }
 
     func testFasterMeansLowerResolution() {
