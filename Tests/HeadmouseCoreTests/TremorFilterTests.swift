@@ -2,91 +2,94 @@ import XCTest
 @testable import HeadmouseCore
 
 final class TremorFilterTests: XCTestCase {
-    func testNotEnoughSamplesPassesThrough() {
-        let f = TremorFilter(gainFloor: 0.1, deadzone: 0)
-        let out = f.process(dx: 3, dy: 0)
-        XCTAssertEqual(out.dx, 3, accuracy: 1e-9, "no angle history yet → passthrough")
+    private let dt = 0.008   // ~120 Hz event rate
+
+    // MARK: - Dwell freeze: travel passes, topping-in-place freezes.
+
+    func testTravelPasses() {
+        let f = TremorFilter()
+        f.configure(TremorSettings(enabled: true, algorithm: .oneEuro, strength: 0.7))
+        var out = (dx: 0.0, dy: 0.0)
+        for _ in 0 ..< 80 { out = f.process(dx: 10, dy: 0, dt: dt) }   // real, sustained travel
+        XCTAssertEqual(out.dx, 10, accuracy: 1.0, "deliberate travel passes at full gain")
     }
 
-    func testStraightMovementPassesThrough() {
-        let f = TremorFilter(gainFloor: 0.1, deadzone: 0)
-        // Warm up with a straight path — every event moves in the same direction.
-        for _ in 0 ..< 30 { _ = f.process(dx: 10, dy: 0) }
-        let out = f.process(dx: 10, dy: 0)
-        XCTAssertEqual(out.dx, 10, accuracy: 0.01, "straight path → gain ≈ 1")
+    func testHoldJitterIsFrozen() {
+        let f = TremorFilter()
+        f.configure(TremorSettings(enabled: true, algorithm: .oneEuro, strength: 0.7))
+        var out = (dx: 0.0, dy: 0.0)
+        // Wander around a point: net displacement stays tiny → should freeze.
+        let pattern = [3.0, -2, 2, -3, 1, -1, 2, -2]
+        for i in 0 ..< 120 { out = f.process(dx: pattern[i % pattern.count], dy: 0, dt: dt) }
+        XCTAssertLessThan(abs(out.dx), 0.6, "topping in place is frozen so the cursor can be held for a click")
     }
 
-    func testJitteryMovementIsDamped() {
-        let f = TremorFilter(gainFloor: 0.1, deadzone: 0)
-        // Alternating direction = high angular deviation = tremor.
-        for i in 0 ..< 30 { _ = f.process(dx: i.isMultiple(of: 2) ? 10 : -10, dy: 0) }
-        let out = f.process(dx: 10, dy: 0)
-        XCTAssertLessThan(abs(out.dx), 5, "jittery path → gain dropped toward the floor")
+    func testDecisiveMovePassesAtLowStrength() {
+        let f = TremorFilter()
+        f.configure(TremorSettings(enabled: true, algorithm: .oneEuro, strength: 0.2))
+        var out = (dx: 0.0, dy: 0.0)
+        for _ in 0 ..< 60 { out = f.process(dx: 15, dy: 0, dt: dt) }
+        XCTAssertEqual(out.dx, 15, accuracy: 1.5, "decisive travel passes even at low strength")
+    }
+
+    func testTravelPreservesDistance() {
+        let f = TremorFilter()
+        f.configure(TremorSettings(enabled: true, algorithm: .oneEuro, strength: 0.7))
+        var total = 0.0
+        for _ in 0 ..< 60 { total += f.process(dx: 20, dy: 0, dt: dt).dx }   // 1200 px traveled
+        for _ in 0 ..< 200 { total += f.process(dx: 0, dy: 0, dt: dt).dx }
+        XCTAssertGreaterThan(total, 1100, "a real move keeps essentially all its distance")
+    }
+
+    func testResetClearsHistory() {
+        let f = TremorFilter()
+        f.configure(TremorSettings(enabled: true, algorithm: .oneEuro, strength: 0.7))
+        for _ in 0 ..< 40 { _ = f.process(dx: 20, dy: 0, dt: dt) }
+        f.reset()
+        XCTAssertEqual(f.lastGain, 1.0, accuracy: 1e-9, "reset clears dwell/low-pass state")
     }
 
     func testDeadzoneSuppressesTinyMovement() {
-        let f = TremorFilter(gainFloor: 0.1, deadzone: 5)
-        let out = f.process(dx: 2, dy: 0)
+        let f = TremorFilter()
+        f.configure(TremorSettings(enabled: true, algorithm: .oneEuro, strength: 0.5, deadzone: 5))
+        let out = f.process(dx: 2, dy: 0, dt: dt)
         XCTAssertEqual(out.dx, 0, accuracy: 1e-9)
         XCTAssertEqual(out.dy, 0, accuracy: 1e-9)
     }
 
-    func testResetClearsHistory() {
-        let f = TremorFilter(gainFloor: 0.1, deadzone: 0)
-        for i in 0 ..< 30 { _ = f.process(dx: i.isMultiple(of: 2) ? 10 : -10, dy: 0) }
-        f.reset()
-        let out = f.process(dx: 7, dy: 0)
-        XCTAssertEqual(out.dx, 7, accuracy: 1e-9, "after reset → passthrough again")
-    }
-
-    func testStrengthZeroMeansNoDamping() {
-        let f = TremorFilter()
-        f.configure(TremorSettings(enabled: true, strength: 0, deadzone: 0))
-        for i in 0 ..< 30 { _ = f.process(dx: i.isMultiple(of: 2) ? 10 : -10, dy: 0) }
-        let out = f.process(dx: 10, dy: 0)
-        XCTAssertEqual(out.dx, 10, accuracy: 0.01, "strength 0 → gain floor 1 → no damping")
-    }
-
-    func testTremorSettingsResilientDecode() throws {
-        let s = try JSONDecoder().decode(TremorSettings.self, from: #"{"enabled": true}"#.data(using: .utf8)!)
-        XCTAssertTrue(s.enabled)
-        XCTAssertEqual(s.algorithm, .angleMouse, "missing algorithm takes default")
-        XCTAssertEqual(s.strength, 0.5, accuracy: 1e-9, "missing key takes default")
-    }
-
-    // MARK: - Speed algorithm
-
-    func testSpeedDampsSlowMovement() {
-        let f = TremorFilter()
-        f.configure(TremorSettings(enabled: true, algorithm: .speed, strength: 0.5))
-        let out = f.process(dx: 1, dy: 0, dt: 0.1)   // 10 px/s → slow
-        XCTAssertLessThan(out.dx, 1, "slow movement is damped")
-    }
-
-    func testSpeedPassesFastMovement() {
-        let f = TremorFilter()
-        f.configure(TremorSettings(enabled: true, algorithm: .speed, strength: 0.5))
-        let out = f.process(dx: 100, dy: 0, dt: 0.1)  // 1000 px/s → fast
-        XCTAssertEqual(out.dx, 100, accuracy: 0.01, "fast movement passes through")
-    }
-
-    // MARK: - EWMA algorithm
+    // MARK: - EWMA baseline
 
     func testEwmaDampsJitter() {
         let f = TremorFilter()
         f.configure(TremorSettings(enabled: true, algorithm: .ewma, strength: 0.8))
         var last = 0.0
-        for i in 0 ..< 40 { last = f.process(dx: i.isMultiple(of: 2) ? 10 : -10, dy: 0, dt: 0.008).dx }
+        for i in 0 ..< 40 { last = f.process(dx: i.isMultiple(of: 2) ? 10 : -10, dy: 0, dt: dt).dx }
         XCTAssertLessThan(abs(last), 5, "EWMA averages out alternating jitter")
     }
 
-    // MARK: - Hybrid algorithm
-
-    func testHybridPassesFastEvenIfJittery() {
+    func testEwmaPreservesTotalTravel() {
         let f = TremorFilter()
-        f.configure(TremorSettings(enabled: true, algorithm: .hybrid, strength: 0.5))
-        var out = (dx: 0.0, dy: 0.0)
-        for i in 0 ..< 20 { out = f.process(dx: i.isMultiple(of: 2) ? 100 : -100, dy: 0, dt: 0.05) }
-        XCTAssertEqual(abs(out.dx), 100, accuracy: 0.01, "fast movement passes even when jittery")
+        f.configure(TremorSettings(enabled: true, algorithm: .ewma, strength: 0.8))
+        var total = 0.0
+        for _ in 0 ..< 20 { total += f.process(dx: 10, dy: 0, dt: dt).dx }
+        for _ in 0 ..< 400 { total += f.process(dx: 0, dy: 0, dt: dt).dx }
+        XCTAssertEqual(total, 200, accuracy: 1.0, "EWMA also preserves total travel")
+    }
+
+    // MARK: - Settings
+
+    func testTremorSettingsResilientDecode() throws {
+        let s = try JSONDecoder().decode(TremorSettings.self, from: #"{"enabled": true}"#.data(using: .utf8)!)
+        XCTAssertTrue(s.enabled)
+        XCTAssertEqual(s.algorithm, .oneEuro, "missing algorithm takes default")
+        XCTAssertEqual(s.strength, 0.5, accuracy: 1e-9, "missing key takes default")
+    }
+
+    func testUnknownAlgorithmFallsBackToDefault() throws {
+        let s = try JSONDecoder().decode(
+            TremorSettings.self,
+            from: #"{"enabled": true, "algorithm": "angleMouse"}"#.data(using: .utf8)!
+        )
+        XCTAssertEqual(s.algorithm, .oneEuro)
     }
 }

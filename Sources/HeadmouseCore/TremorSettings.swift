@@ -1,18 +1,15 @@
 import Foundation
 
-/// Which tremor-stabilization algorithm to use. Kept as a setting so different
-/// approaches can be A/B compared via presets.
+/// Which tremor-stabilization algorithm to use. Both preserve the travel distance
+/// of deliberate movement (they filter position, not per-event gain), so only
+/// jitter is removed and the cursor still reaches its target. Kept as a setting
+/// so the two can be A/B compared via presets.
 public enum TremorAlgorithm: String, Codable, CaseIterable {
-    /// Angle Mouse (Wobbrock, CHI 2009): gain from angular deviation of the path
-    /// (straight = deliberate = full gain; jittery = tremor = damped).
-    case angleMouse
-    /// Speed-based gain (slow = damped, fast = full gain).
-    case speed
-    /// Exponential moving average — a low-pass smoother (classic anti-tremor).
+    /// One Euro Filter (Casiez et al., CHI 2012): speed-adaptive low-pass — heavy
+    /// smoothing when slow (tremor), light when fast (intent). Recommended.
+    case oneEuro
+    /// Exponential moving average — a fixed low-pass; simpler but adds constant lag.
     case ewma
-    /// Angle + speed: full gain if the path is straight OR fast; damps only slow
-    /// AND jittery movement (the signature of tremor).
-    case hybrid
 }
 
 /// Settings for tremor stabilization (the Stabilization tab). Applied by an
@@ -22,8 +19,8 @@ public struct TremorSettings: Codable, Equatable {
     public var enabled: Bool
     /// Which algorithm to run.
     public var algorithm: TremorAlgorithm
-    /// 0…1 — how strongly to damp tremor. 0 = no effect (gain stays 1); higher
-    /// lowers the gain floor applied during jittery movement.
+    /// 0…1 — how strongly to smooth. 0 = barely any effect; 1 = heavy smoothing of
+    /// slow movement (maximum tremor suppression).
     public var strength: Double
     /// Per-event movements below this many pixels are suppressed (kills the
     /// smallest sub-pixel jitter). 0 = off.
@@ -31,7 +28,7 @@ public struct TremorSettings: Codable, Equatable {
 
     public init(
         enabled: Bool = false,
-        algorithm: TremorAlgorithm = .angleMouse,
+        algorithm: TremorAlgorithm = .oneEuro,
         strength: Double = 0.5,
         deadzone: Double = 0
     ) {

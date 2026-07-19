@@ -11,13 +11,14 @@ final class EventTapFilter {
     private let filter = TremorFilter()
     private var tap: CFMachPort?
     private var runLoopSource: CFRunLoopSource?
-    private var lastLocation: CGPoint?
     private var lastTime: TimeInterval = 0
+    private var dbgCount = 0
 
     /// Apply the current tremor settings: (re)configure the filter and start or
     /// stop the tap. Safe to call repeatedly.
     func update(_ settings: TremorSettings) {
         filter.configure(settings)
+        dbg("update enabled=\(settings.enabled) algo=\(settings.algorithm) strength=\(settings.strength) deadzone=\(settings.deadzone) trusted=\(AXIsProcessTrusted()) tapActive=\(tap != nil)")
         if settings.enabled {
             start()
         } else {
@@ -31,6 +32,7 @@ final class EventTapFilter {
         guard AXIsProcessTrusted() else {
             let options = [kAXTrustedCheckOptionPrompt.takeUnretainedValue() as String: true] as CFDictionary
             _ = AXIsProcessTrustedWithOptions(options)
+            dbg("start ABORTED — Accessibility not granted")
             NSLog("HeadmouseHelper: Accessibility not granted — grant it, then re-enable stabilization.")
             return
         }
@@ -46,6 +48,7 @@ final class EventTapFilter {
             tap: .cgSessionEventTap, place: .headInsertEventTap, options: .defaultTap,
             eventsOfInterest: mask, callback: Self.callback, userInfo: refcon
         ) else {
+            dbg("start FAILED — CGEvent.tapCreate returned nil")
             NSLog("HeadmouseHelper: failed to create event tap")
             return
         }
@@ -57,8 +60,8 @@ final class EventTapFilter {
         CGEvent.tapEnable(tap: tap, enable: true)
 
         filter.reset()
-        lastLocation = nil
         lastTime = 0
+        dbg("start OK — tap created & enabled")
     }
 
     private func stop() {
@@ -80,6 +83,7 @@ final class EventTapFilter {
     private func handle(_ type: CGEventType, _ event: CGEvent) -> Unmanaged<CGEvent>? {
         // The system disables a tap on timeout / user input; just re-enable it.
         if type == .tapDisabledByTimeout || type == .tapDisabledByUserInput {
+            dbg("tap DISABLED by \(type == .tapDisabledByTimeout ? "timeout" : "userInput") — re-enabling")
             if let tap { CGEvent.tapEnable(tap: tap, enable: true) }
             return Unmanaged.passUnretained(event)
         }
@@ -93,11 +97,18 @@ final class EventTapFilter {
 
         let step = filter.process(dx: dx, dy: dy, dt: dt)
 
+        dbgCount += 1
+        if dbgCount % 15 == 0 {
+            dbg(String(format: "handle rawX=%.1f rawY=%.1f stepX=%.1f stepY=%.1f netDisp=%.1f gain=%.2f dt=%.3f",
+                       dx, dy, step.dx, step.dy, filter.lastNetDisp, filter.lastGain, dt))
+        }
+
         // Reposition the cursor along the smoothed path (editing deltas alone does
-        // not move it — the location field does).
-        let base = lastLocation ?? CGPoint(x: event.location.x - dx, y: event.location.y - dy)
+        // not move it — the location field does). Anchor to the real reported
+        // location each event (event.location - rawDelta = the previous cursor
+        // position) so the path never drifts if anything else moves the cursor.
+        let base = CGPoint(x: event.location.x - dx, y: event.location.y - dy)
         let loc = clampToMainDisplay(CGPoint(x: base.x + step.dx, y: base.y + step.dy))
-        lastLocation = loc
 
         event.location = loc
         event.setDoubleValueField(.mouseEventDeltaX, value: step.dx)
@@ -111,5 +122,20 @@ final class EventTapFilter {
             x: min(max(point.x, bounds.minX), bounds.maxX - 1),
             y: min(max(point.y, bounds.minY), bounds.maxY - 1)
         )
+    }
+
+    // Temporary diagnostics — NSLog isn't captured over SSH, so append to a file.
+    private func dbg(_ message: String) {
+        let line = "\(ProcessInfo.processInfo.systemUptime) EventTap: \(message)\n"
+        let url = URL(fileURLWithPath: NSHomeDirectory() + "/hmh-debug.log")
+        if let data = line.data(using: .utf8) {
+            if let handle = try? FileHandle(forWritingTo: url) {
+                handle.seekToEndOfFile()
+                handle.write(data)
+                try? handle.close()
+            } else {
+                try? data.write(to: url)
+            }
+        }
     }
 }

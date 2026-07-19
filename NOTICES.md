@@ -34,15 +34,15 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-## Angle Mouse — algorithm citation
+## One Euro Filter — algorithm citation
 
-The tremor-stabilization filter's `angleMouse` mode reimplements the **Angle
-Mouse** technique from the paper:
+The tremor-stabilization filter's `oneEuro` mode reimplements the **1€ Filter**
+from the paper:
 
-> Wobbrock, J. O., et al. "The Angle Mouse: Target-Agnostic Dynamic Gain
-> Adjustment Based on Angular Deviation." CHI 2009.
-> <https://faculty.washington.edu/wobbrock/pubs/chi-09.01.pdf>
+> Casiez, G., Roussel, N. & Vogel, D. "1€ Filter: A Simple Speed-based Low-pass
+> Filter for Noisy Input in Interactive Systems." CHI 2012.
+> <https://gery.casiez.net/1euro/>
 
 This is a published algorithm reimplemented from the paper — not third-party
-source code. (An earlier prototype used opentrack's "accela" filter; it was
-replaced and is no longer part of the app.)
+source code. (Earlier prototypes used opentrack's "accela" filter and the Angle
+Mouse technique; both were replaced and are no longer part of the app.)

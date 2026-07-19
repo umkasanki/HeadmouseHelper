@@ -1,0 +1,6 @@
+{
+  "enabled": true,
+  "algorithm": "oneEuro",
+  "strength": 0.7,
+  "deadzone": 0
+}

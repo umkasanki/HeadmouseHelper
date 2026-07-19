@@ -20,6 +20,9 @@ final class SettingsModel: ObservableObject {
 
     var movement: MovementSettings { controller.movement }
     func updateMovement(_ movement: MovementSettings) { controller.updateMovement(movement) }
+
+    var tremor: TremorSettings { controller.tremor }
+    func updateTremor(_ tremor: TremorSettings) { controller.updateTremor(tremor) }
 }
 
 /// The window's content: Control (big Stop/Start circle) + Movement (tuning) tabs.
@@ -36,22 +39,23 @@ struct SettingsView: View {
             Picker("", selection: $tab) {
                 Text("Control").tag(0)
                 Text("Movement").tag(1)
+                Text("Stabilization").tag(2)
             }
             .pickerStyle(.segmented)
             .labelsHidden()
-            .frame(width: 220)
+            .frame(width: 320)
             .padding(.top, 10)
             .padding(.bottom, 8)
 
             Divider()
 
-            if tab == 0 {
-                ControlTab(model: model)
-            } else {
-                MovementTab(model: model)
+            switch tab {
+            case 0: ControlTab(model: model)
+            case 1: MovementTab(model: model)
+            default: StabilizationTab(model: model)
             }
         }
-        .frame(width: 300)
+        .frame(width: 360)
     }
 }
 
@@ -135,6 +139,42 @@ private struct MovementTab: View {
     private var disableAcceleration: Binding<Bool> {
         Binding(get: { model.movement.disableAcceleration },
                 set: { var m = model.movement; m.disableAcceleration = $0; model.updateMovement(m) })
+    }
+}
+
+private struct StabilizationTab: View {
+    @ObservedObject var model: SettingsModel
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 18) {
+            Toggle("Enable stabilization", isOn: enabled)
+
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Algorithm").font(.subheadline)
+                Picker("", selection: algorithm) {
+                    Text("Adaptive (1€)").tag(TremorAlgorithm.oneEuro)
+                    Text("Smoothing (EWMA)").tag(TremorAlgorithm.ewma)
+                }
+                .labelsHidden()
+                .pickerStyle(.menu)
+            }
+
+            StepperSlider(title: "Strength", value: strength, range: 0 ... 1, step: 0.01)
+        }
+        .padding(20)
+    }
+
+    private var enabled: Binding<Bool> {
+        Binding(get: { model.tremor.enabled },
+                set: { var t = model.tremor; t.enabled = $0; model.updateTremor(t) })
+    }
+    private var algorithm: Binding<TremorAlgorithm> {
+        Binding(get: { model.tremor.algorithm },
+                set: { var t = model.tremor; t.algorithm = $0; model.updateTremor(t) })
+    }
+    private var strength: Binding<Double> {
+        Binding(get: { model.tremor.strength },
+                set: { var t = model.tremor; t.strength = $0; model.updateTremor(t) })
     }
 }
 
