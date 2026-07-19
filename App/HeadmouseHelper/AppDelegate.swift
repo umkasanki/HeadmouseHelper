@@ -5,6 +5,7 @@ import IOKit.hid
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private var seizer: IOKitSeizer!
     private var tuner: IOKitPointerTuner!
+    private var eventTap: EventTapFilter!
     private var controller: TrackingController!
     private var statusBar: StatusBarController!
 
@@ -18,8 +19,16 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 
         seizer = IOKitSeizer()
         tuner = IOKitPointerTuner()
+        eventTap = EventTapFilter()
         controller = TrackingController(seizer: seizer, store: SettingsStore(), tuner: tuner)
         statusBar = StatusBarController(controller: controller)
+
+        // Push tremor settings to the event tap on any change, and once now.
+        controller.observe { [weak self] in
+            guard let self else { return }
+            eventTap.update(controller.tremor)
+        }
+        eventTap.update(controller.tremor)
 
         // macOS resets device pointer properties on wake — re-apply our tuning.
         NSWorkspace.shared.notificationCenter.addObserver(

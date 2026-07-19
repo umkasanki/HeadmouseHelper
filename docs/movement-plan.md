@@ -103,19 +103,24 @@ throwaway binary that resets on rebuild), so we de-risk the tap inside the app,
 where stable signing persists the grant. Also: the accela gain curve was tuned for
 head-tracking degrees; pixel-scale tuning happens on-device in Part 2c.
 
-### Part 2b — Event-tap wiring + permission  (day)
+### Part 2b — Event-tap wiring + permission  (done)
 
-Ends with: enabling tremor (via the setting) actually smooths the cursor on device.
+Ends with: enabling tremor actually reshapes the cursor on device (de-risked).
 
-- [ ] **App — event tap.** `EventTapFilter` — `CGEventTap` on
-      `mouseMoved`/`leftMouseDragged`/`rightMouseDragged`; run deltas through
-      `TremorFilter`; write back `kCGMouseEventDeltaX/Y`. Start/stop per setting.
-- [ ] **Permission.** Request **Accessibility** (only when tremor is enabled);
-      add `NSAccessibilityUsageDescription` to `Info.plist`; handle grant +
-      relaunch (stable signing already persists it).
-- [ ] **Wire.** Enable/disable the tap from the tremor setting; reassert as needed.
-- [ ] **Verify on device (rough):** enabling tremor visibly smooths jitter.
-- [ ] **Commit.**
+- [x] **App — event tap.** `EventTapFilter` — `CGEventTap` on
+      mouseMoved/dragged; runs deltas through `TremorFilter` and repositions the
+      cursor along the smoothed path (editing deltas alone doesn't move it — the
+      location field does). Start/stop per setting; re-enables on tap-disable.
+- [x] **Permission.** Requests **Accessibility** on enable (`AXIsProcessTrusted` /
+      prompt); no Info.plist key exists for it. Grant persists via stable signing.
+      (Linked `-framework ApplicationServices`.)
+- [x] **Wire.** `Settings.tremor` + `TrackingController.updateTremor`; AppDelegate
+      pushes tremor to `EventTapFilter` on every change.
+- [x] **De-risk confirmed on device:** with tremor ON the cursor is hard-capped —
+      device 773 → 100px, but device 6147 (fast) → still 120px. The tap reshapes
+      cursor movement and Accessibility works. Filter is far too aggressive for
+      pixel scale → tune in 2c.
+- [x] **Commit.** (2b tested via `settings.json` toggle — no UI yet.)
 
 ### Part 2c — Stabilization tab + tuning  (day)
 

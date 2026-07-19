@@ -83,6 +83,14 @@ public final class TrackingController {
     /// Re-assert movement tuning (e.g. after wake, when macOS resets device props).
     public func reapplyTuning() { apply() }
 
+    public var tremor: TremorSettings { settings.tremor }
+
+    public func updateTremor(_ tremor: TremorSettings) {
+        settings.tremor = tremor
+        store.save(settings)
+        notify()
+    }
+
     // MARK: - Enforcement
 
     /// Make the hardware match the desired state. Idempotent: release
