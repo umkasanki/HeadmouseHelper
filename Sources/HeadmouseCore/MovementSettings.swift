@@ -28,9 +28,14 @@ public struct MovementSettings: Codable, Equatable {
 
     /// IOKit pointer resolution (lower = faster). Maps speed 0…1 onto the useful
     /// range measured on the device: slow ≈ 1600, fast ≈ 120.
+    ///
+    /// Exponential, not linear: since effective speed ∝ 1/resolution, an exponential
+    /// map makes each equal slider step change speed by a constant percentage, so
+    /// the slider feels even across its whole range (a linear map felt dead for
+    /// most of the travel and jumped near the top).
     public var pointerResolution: Double {
         let fast = 120.0, slow = 1600.0
-        return slow - speed.clamped(0, 1) * (slow - fast)
+        return slow * pow(fast / slow, speed.clamped(0, 1))
     }
 }
 
