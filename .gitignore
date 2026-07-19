@@ -10,6 +10,7 @@ spike/seize-spike
 spike/seize-verify
 spike/cursor-probe
 spike/pointer-spike
+spike/speed-probe
 
 # Icon build artifacts (source: tools/AppIcon.svg + make-icon.swift; shipped: Resources/AppIcon.icns)
 tools/make-icon

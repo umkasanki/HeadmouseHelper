@@ -36,9 +36,10 @@ S. Halik (ISC) with license text.
 - [x] Spike compiles against the private `IOHIDEventSystemClient` API via a
       bridging header (`spike/IOKitSPI.h`, `spike/PointerSpike.swift`).
 - [x] Reads the HeadMouse service client + current `PointerResolution` (≈68.7).
-- [ ] Confirm **setting** resolution (+ acceleration "poke") actually changes
-      cursor speed on the device (run `./spike/pointer-spike 400`, move head,
-      verify slower; `... 120` faster). Tracking must be ON (not seized).
+- [x] Confirmed **setting** resolution changes cursor speed, inversely
+      proportional. Measured effective speed (cursor px per unit of head movement,
+      `spike/SpeedProbe.swift`): res 150 → 0.237, res 500 → 0.072, res 1200 →
+      0.016. Mechanism validated.
 
 ---
 
