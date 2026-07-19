@@ -1,87 +1,88 @@
 import Foundation
 
-/// 2D tremor-stabilization filter adapted from opentrack's "accela" filter
-/// (© Stanislaw Halik, ISC — see NOTICES.md).
+/// 2D tremor-stabilization filter based on the **Angle Mouse** technique
+/// (Wobbrock et al., CHI 2009 — "The Angle Mouse: Target-Agnostic Dynamic Gain
+/// Adjustment Based on Angular Deviation"; algorithm cited in NOTICES.md).
 ///
-/// It keeps a smoothed `output` position and eases it toward the accumulated raw
-/// `target` at a velocity given by a nonlinear gain curve of the (dead-zoned,
-/// smoothing-scaled) error: small/slow error (tremor) → tiny gain → heavily
-/// damped; large/fast error (intent) → high gain → passes through with little
-/// lag. Feed relative deltas per event; it returns the smoothed delta to apply.
-///
-/// Note: the gain curve's domain was tuned by opentrack for head-tracking
-/// degrees. For pixel-scale cursor input the effective range is tuned on-device
-/// via `smoothing` (and, later, the curve/scale) — this type is the structure.
+/// It watches the *direction* of recent movement, not just speed: a straight
+/// path (low angular deviation) is deliberate → full gain (passthrough); a
+/// jittery, turning path (high angular deviation) is tremor → the gain is
+/// dropped toward a floor, damping it. Because it applies a per-event gain in
+/// [floor…1] it never lags intentional movement and needs no absolute target,
+/// so it suits relative pixel deltas (unlike an integrate-to-target model).
 public final class TremorFilter {
-    public var smoothing: Double
+    /// Gain applied at maximum tremor (0…1). Lower = stronger damping.
+    public var gainFloor: Double
+    /// Per-event movements below this many pixels are suppressed.
     public var deadzone: Double
 
-    private var targetX = 0.0, targetY = 0.0
-    private var outputX = 0.0, outputY = 0.0
+    private let sampleDistance = 8.0     // ΔD: pixels between sampled angles
+    private let maxSamples = 16          // n: queued angles
+    private let maxDeviationDeg = 120.0  // σθmax for n = 16
 
-    /// accela pos_gains: (error distance, gain), ascending by x. Piecewise-linear.
-    private static let gains: [(x: Double, y: Double)] = [
-        (0, 0), (0.33, 0.375), (0.66, 0.75), (1.33, 2.25), (1.66, 4.5),
-        (2, 7.5), (3, 24), (5, 60), (7, 110), (8, 150), (9, 200),
-    ]
+    private var angles: [Double] = []    // recent movement directions (radians)
+    private var accumX = 0.0, accumY = 0.0
 
-    public init(smoothing: Double = 1.0, deadzone: Double = 0.1) {
-        self.smoothing = smoothing
+    public init(gainFloor: Double = 0.15, deadzone: Double = 0) {
+        self.gainFloor = gainFloor
         self.deadzone = deadzone
     }
 
     public func configure(_ settings: TremorSettings) {
-        smoothing = settings.smoothing
+        // strength 0…1 → gainFloor 1…0.05 (0 = no damping).
+        gainFloor = 1 - settings.strength * 0.95
         deadzone = settings.deadzone
     }
 
     public func reset() {
-        targetX = 0; targetY = 0; outputX = 0; outputY = 0
+        angles.removeAll(keepingCapacity: true)
+        accumX = 0; accumY = 0
     }
 
-    /// Feed one raw movement (dx, dy) over `dt` seconds; returns the smoothed
-    /// movement to apply to the cursor this step.
-    public func process(dx: Double, dy: Double, dt: Double) -> (dx: Double, dy: Double) {
-        targetX += dx
-        targetY += dy
-
-        let s = max(smoothing, 1e-6)
-        let ex = deadzoned(targetX - outputX) / s
-        let ey = deadzoned(targetY - outputY) / s
-
-        let dist = (ex * ex + ey * ey).squareRoot()
-        guard dist > 1e-6 else { return (0, 0) }
-
-        let gain = gainValue(at: dist)
-
-        // Distribute the gain across axes by each axis's share (accela do_deltas).
-        var nx = abs(ex) / dist
-        var ny = abs(ey) / dist
-        let n = nx + ny
-        if n > 1e-6 { nx /= n; ny /= n } else { nx = 0; ny = 0 }
-
-        let stepX = (ex < 0 ? -1.0 : 1.0) * nx * gain * dt
-        let stepY = (ey < 0 ? -1.0 : 1.0) * ny * gain * dt
-
-        outputX += stepX
-        outputY += stepY
-        return (stepX, stepY)
-    }
-
-    private func deadzoned(_ d: Double) -> Double {
-        if abs(d) > deadzone { return d - (d < 0 ? -deadzone : deadzone) }
-        return 0
-    }
-
-    private func gainValue(at x: Double) -> Double {
-        let g = Self.gains
-        if x <= g.first!.x { return g.first!.y }
-        if x >= g.last!.x { return g.last!.y }
-        for i in 1 ..< g.count where x <= g[i].x {
-            let a = g[i - 1], b = g[i]
-            let t = (x - a.x) / (b.x - a.x)
-            return a.y + t * (b.y - a.y)
+    /// Feed one raw movement (dx, dy); returns the movement to apply this event.
+    /// (dt is unused — the gain is instantaneous.)
+    public func process(dx: Double, dy: Double, dt _: Double = 0) -> (dx: Double, dy: Double) {
+        if (dx * dx + dy * dy).squareRoot() < deadzone {
+            return (0, 0)
         }
-        return g.last!.y
+
+        // Sample a movement angle whenever we've travelled ΔD since the last one.
+        accumX += dx
+        accumY += dy
+        if (accumX * accumX + accumY * accumY).squareRoot() >= sampleDistance {
+            angles.append(atan2(accumY, accumX))
+            if angles.count > maxSamples { angles.removeFirst() }
+            accumX = 0; accumY = 0
+        }
+
+        let gain = currentGain()
+        return (dx * gain, dy * gain)
+    }
+
+    /// Current C-D gain in [gainFloor…1] from the angular deviation of the queue.
+    private func currentGain() -> Double {
+        guard angles.count >= 2 else { return 1 }  // not enough data → passthrough
+        let deviation = min(angularDeviationDegrees() / maxDeviationDeg, 1)
+        return gainFloor + (1 - deviation) * (1 - gainFloor)
+    }
+
+    private func angularDeviationDegrees() -> Double {
+        var mx = 0.0, my = 0.0
+        for a in angles { mx += cos(a); my += sin(a) }
+        let mean = atan2(my, mx)
+
+        var sumSquares = 0.0
+        for a in angles {
+            let d = angularDistanceDegrees(a, mean)
+            sumSquares += d * d
+        }
+        return (sumSquares / Double(angles.count - 1)).squareRoot()
+    }
+
+    /// Acute nonnegative angle between two angles, in [0…180] degrees (Eq. 3).
+    private func angularDistanceDegrees(_ a: Double, _ b: Double) -> Double {
+        let degrees = (a - b) * 180 / .pi
+        let m = abs(degrees).truncatingRemainder(dividingBy: 360)
+        return 180 - abs(m - 180)
     }
 }
