@@ -34,4 +34,15 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-<!-- opentrack (ISC) will be added here when the tremor filter (Part 2) lands. -->
+## Angle Mouse — algorithm citation
+
+The tremor-stabilization filter's `angleMouse` mode reimplements the **Angle
+Mouse** technique from the paper:
+
+> Wobbrock, J. O., et al. "The Angle Mouse: Target-Agnostic Dynamic Gain
+> Adjustment Based on Angular Deviation." CHI 2009.
+> <https://faculty.washington.edu/wobbrock/pubs/chi-09.01.pdf>
+
+This is a published algorithm reimplemented from the paper — not third-party
+source code. (An earlier prototype used opentrack's "accela" filter; it was
+replaced and is no longer part of the app.)

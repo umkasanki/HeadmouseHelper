@@ -122,15 +122,31 @@ Ends with: enabling tremor actually reshapes the cursor on device (de-risked).
       pixel scale → tune in 2c.
 - [x] **Commit.** (2b tested via `settings.json` toggle — no UI yet.)
 
-### Part 2c — Stabilization tab + tuning  (day)
+### Part 2c — Algorithms, A/B tooling, tab UI + tuning  (in progress)
 
-Ends with: a polished Stabilization tab, tuned on the real device.
+Ends with: the best algorithm chosen + tuned on device, exposed in a Stabilization tab.
 
-- [ ] **UI.** 3rd tab **Stabilization**: enable toggle + smoothing + dead-zone
-      (`StepperSlider`), live-apply.
-- [ ] **Verify on device:** head tremor smoothed, deliberate motion responsive and
-      lag-free, trackpad normal; tune the gain curve / defaults by feel.
-- [ ] **Commit.** Update `NOTICES.md` (opentrack ISC).
+Done:
+- [x] Pivoted the filter accela → **Angle Mouse** (pixel-native per-event gain
+      multiplier; accela's velocity cap was wrong for pixel deltas).
+- [x] Added `speed`, `ewma`, `hybrid` algorithms (`TremorSettings.algorithm`); 29 tests.
+- [x] **A/B tooling**: `presets/tremor/{angle-mouse,speed,ewma,hybrid}-v1.json`
+      + `tools/tremor-preset.sh {list|save|apply}` (writes settings.json + relaunch).
+- [x] `NOTICES.md` cites Angle Mouse (Wobbrock, CHI 2009); accela removed.
+- [x] Testing setup: RustDesk **View Mode** (under the ⌨ menu) is required — the
+      user drives Windows via **SmartNav** (head tracker), so that input forwards
+      over RustDesk and fights the Mac's HeadMouse unless View Mode is on. Cleanest
+      is testing physically at the Mac (RustDesk video lag confounds "responsiveness").
+
+Remaining:
+- [ ] **Run the on-device A/B** (View Mode on): compare hybrid / angleMouse /
+      speed / ewma; pick the best for head movement; watch for over-damping of
+      naturally-curvy head motion.
+- [ ] **Tune the winner** (strength/deadzone; for speed/hybrid the ~60/600 px/s
+      speed thresholds; for angle the sample distance/window). Save as default preset.
+- [ ] **Stabilization tab UI** (3rd tab): enable toggle + algorithm picker +
+      strength/deadzone (`StepperSlider`), live-apply.
+- [ ] **Commit.**
 
 ---
 
