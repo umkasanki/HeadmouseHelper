@@ -112,11 +112,11 @@ private struct MovementTab: View {
         VStack(alignment: .leading, spacing: 18) {
             Toggle("Disable acceleration", isOn: disableAcceleration)
 
-            StepperSlider(title: "Acceleration", value: acceleration, range: 0 ... 40, step: 1)
+            StepperSlider(title: "Acceleration", value: acceleration, range: 0 ... 40, step: 0.01)
                 .disabled(model.movement.disableAcceleration)
                 .opacity(model.movement.disableAcceleration ? 0.4 : 1)
 
-            StepperSlider(title: "Speed", value: speed, range: 0 ... 1, step: 0.05)
+            StepperSlider(title: "Speed", value: speed, range: 0 ... 1, step: 0.01)
 
             Button("Restore defaults") { model.updateMovement(MovementSettings()) }
                 .frame(maxWidth: .infinity, alignment: .center)
