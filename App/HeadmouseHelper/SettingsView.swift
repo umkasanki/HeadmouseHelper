@@ -149,17 +149,19 @@ private struct StabilizationTab: View {
         VStack(alignment: .leading, spacing: 18) {
             Toggle("Enable stabilization", isOn: enabled)
 
-            VStack(alignment: .leading, spacing: 4) {
-                Text("Algorithm").font(.subheadline)
-                Picker("", selection: algorithm) {
-                    Text("Adaptive (1€)").tag(TremorAlgorithm.oneEuro)
-                    Text("Smoothing (EWMA)").tag(TremorAlgorithm.ewma)
-                }
-                .labelsHidden()
-                .pickerStyle(.menu)
-            }
+            StepperSlider(
+                title: model.tremor.linkAxes ? "Smoothing" : "Horizontal smoothing",
+                value: smoothing, range: 0 ... 1, step: 0.01
+            )
 
-            StepperSlider(title: "Strength", value: strength, range: 0 ... 1, step: 0.01)
+            Toggle("Same for both axes", isOn: linkAxes)
+
+            if !model.tremor.linkAxes {
+                StepperSlider(
+                    title: "Vertical smoothing",
+                    value: verticalSmoothing, range: 0 ... 1, step: 0.01
+                )
+            }
         }
         .padding(20)
     }
@@ -168,13 +170,24 @@ private struct StabilizationTab: View {
         Binding(get: { model.tremor.enabled },
                 set: { var t = model.tremor; t.enabled = $0; model.updateTremor(t) })
     }
-    private var algorithm: Binding<TremorAlgorithm> {
-        Binding(get: { model.tremor.algorithm },
-                set: { var t = model.tremor; t.algorithm = $0; model.updateTremor(t) })
+    private var smoothing: Binding<Double> {
+        Binding(get: { model.tremor.smoothing },
+                set: { var t = model.tremor; t.smoothing = $0; model.updateTremor(t) })
     }
-    private var strength: Binding<Double> {
-        Binding(get: { model.tremor.strength },
-                set: { var t = model.tremor; t.strength = $0; model.updateTremor(t) })
+    private var verticalSmoothing: Binding<Double> {
+        Binding(get: { model.tremor.effectiveVerticalSmoothing },
+                set: { var t = model.tremor; t.verticalSmoothing = $0; model.updateTremor(t) })
+    }
+    private var linkAxes: Binding<Bool> {
+        Binding(get: { model.tremor.linkAxes },
+                set: {
+                    var t = model.tremor
+                    // Unlinking starts the vertical axis where it already is, so the
+                    // cursor doesn't jump the moment the box is unticked.
+                    if !$0 { t.verticalSmoothing = t.effectiveVerticalSmoothing }
+                    t.linkAxes = $0
+                    model.updateTremor(t)
+                })
     }
 }
 

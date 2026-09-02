@@ -1,7 +1,9 @@
 #!/bin/bash
 # Save / apply / list tremor-stabilization presets, for A/B testing which
-# algorithm + parameters feel best. Presets live in presets/tremor/<name>.json
-# and contain a TremorSettings object (enabled, algorithm, strength, deadzone).
+# settings feel best. Presets live in presets/tremor/<name>.json and contain a
+# TremorSettings object (enabled, smoothing, verticalSmoothing, linkAxes, trace).
+# 'record-trace' turns on trace capture: it writes ~/hmh-trace.csv, the fixture
+# the offline tuning harness replays.
 #
 #   ./tools/tremor-preset.sh list
 #   ./tools/tremor-preset.sh save <name>    # snapshot the app's current tremor
