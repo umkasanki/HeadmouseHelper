@@ -13,21 +13,21 @@ driver** (no seize + re-inject for tuning):
    (`PointerResolution`, acceleration), the way LinearMouse does. Native, no
    latency, applies while tracking is ON. (LinearMouse is MIT — keep attribution.)
 2. **Tremor stabilization** → a `CGEventTap` that modifies `mouseMoved`/`dragged`
-   `deltaX/deltaY` **in place** (LinearMouse's transformer pattern), using the
-   **accela** filter math from opentrack (dead zone + nonlinear gain curve:
-   damp small/slow jitter, pass large/fast intent). Applied globally — the filter
-   is transparent to steady input, so the trackpad is effectively unaffected and
-   we avoid per-device disambiguation. (opentrack is ISC — keep attribution.)
+   `deltaX/deltaY` **in place** (LinearMouse's transformer pattern), running an
+   **alpha-beta (steady-state Kalman) filter** per axis over the accumulated
+   position. Applied globally — the filter is transparent to steady input, so the
+   trackpad is effectively unaffected and we avoid per-device disambiguation.
+   See Part 2 for why an estimator and not a gain curve.
 
-`seize` stays only for the on/off feature. **Separate H/V speed is deferred** —
-uniform speed + a good tremor filter should cover the real need; revisit only if
-axes genuinely need different sensitivity. Convert-to-scroll: not needed.
+`seize` stays only for the on/off feature. **Separate H/V speed is deferred**
+(smoothing is per-axis from the start; revisit speed only if that proves
+insufficient). Convert-to-scroll: not needed.
 
 Permissions: speed/accel need no extra permission; the tremor event tap needs
 **Accessibility** (`AXIsProcessTrustedWithOptions`).
 
-Attribution: add a `NOTICES.md` crediting LinearMouse (MIT) and opentrack /
-S. Halik (ISC) with license text.
+Attribution: `NOTICES.md` credits LinearMouse (MIT) with license text, and cites
+Kalata (1984) for the alpha-beta gains — textbook math, no third-party code.
 
 ---
 
@@ -73,82 +73,150 @@ range (device default ≈ 0.6875). "Restore defaults" = app defaults, not macOS'
 
 ---
 
-## Part 2 — Tremor stabilization
+## Part 2 — Tremor stabilization  (restarted 2026-09-02)
 
-Goal: a **Stabilization** tab (the 3rd tab, alongside Control and Movement) that
-smooths head jitter while keeping deliberate movement responsive; the trackpad is
-unaffected. Delivered via a `CGEventTap` that edits mouse-move `deltaX/deltaY`
-**in place** (no re-inject) using opentrack's **accela** filter (ISC — credit in
-NOTICES.md). Big block, so split across days; each sub-part ends with a commit.
+A **Stabilization** tab (the 3rd, alongside Control and Movement) that steadies the
+cursor without making it sluggish. Delivered by the `CGEventTap` from 2b, editing
+mouse-move `deltaX/deltaY` in place.
 
-Tab structure after this: **Control · Movement · Stabilization**.
+### The goal, stated properly
 
-### Part 2a — Filter core  (done)
+Not "remove the shake". The user drives the reference tracker all day at settings
+that still visibly shake, and calls it comfortable. Their words, after the runs that
+produced the numbers below:
 
-Ends with: a tested pure filter + model — no UI yet.
+> I saw slight cursor shake, and the trajectories were not perfect, but everything
+> was predictable and comfortable.
 
-- [x] **Core — filter.** Ported **accela** as a pure, testable `TremorFilter`
-      (`Sources/HeadmouseCore/TremorFilter.swift`): accumulate raw target, ease a
-      smoothed output toward it, dead zone, nonlinear piecewise-linear gain curve
-      (opentrack pos_gains), integrate over dt. 7 unit tests (jitter suppressed,
-      sustained motion passes, monotonic, reset). Credit opentrack / S. Halik (ISC).
-- [x] **Core — model.** `TremorSettings { enabled, smoothing, deadzone }` as a
-      top-level `Settings.tremor` (separate from Movement — it's its own tab),
-      resilient decode + defaults.
-- [x] **Commit.**
+So the goal is **about a pixel of shake, with a completely predictable speed and a
+completely predictable endpoint** — because every movement is aimed at a UI element,
+either the one being clicked now or the one being approached next. Predictable
+*endpoint* is the stronger requirement and it decomposes into three:
 
-Note: the event-tap **spike is folded into Part 2b** — a standalone CGEventTap CLI
-hits the same TCC friction as Input Monitoring (needs Accessibility granted to a
-throwaway binary that resets on rebuild), so we de-risk the tap inside the app,
-where stable signing persists the grant. Also: the accela gain curve was tuned for
-head-tracking degrees; pixel-scale tuning happens on-device in Part 2c.
+1. **It must arrive.** The cursor ends where the head aimed. Any filter that scales
+   movement down loses distance permanently and undershoots.
+2. **It must not sail past.** No overshoot at the stop.
+3. **It must settle fast enough to commit** — you have to see that you hit the target
+   before you click.
 
-### Part 2b — Event-tap wiring + permission  (done)
+### Acceptance criteria (measured, not guessed)
 
-Ends with: enabling tremor actually reshapes the cursor on device (de-risked).
+Captured from Windows SmartNav on 2026-09-02 at the user's own profile (Motion 111
+of 10-120, speed 13/12, 1920x1080). Traces are the fixtures for Part 2d.
 
-- [x] **App — event tap.** `EventTapFilter` — `CGEventTap` on
-      mouseMoved/dragged; runs deltas through `TremorFilter` and repositions the
-      cursor along the smoothed path (editing deltas alone doesn't move it — the
-      location field does). Start/stop per setting; re-enables on tap-disable.
-- [x] **Permission.** Requests **Accessibility** on enable (`AXIsProcessTrusted` /
-      prompt); no Info.plist key exists for it. Grant persists via stable signing.
-      (Linked `-framework ApplicationServices`.)
-- [x] **Wire.** `Settings.tremor` + `TrackingController.updateTremor`; AppDelegate
-      pushes tremor to `EventTapFilter` on every change.
-- [x] **De-risk confirmed on device:** with tremor ON the cursor is hard-capped —
-      device 773 → 100px, but device 6147 (fast) → still 120px. The tap reshapes
-      cursor movement and Accessibility works. Filter is far too aggressive for
-      pixel scale → tune in 2c.
-- [x] **Commit.** (2b tested via `settings.json` toggle — no UI yet.)
+| Holding still | horizontal | vertical |
+|---|---|---|
+| residual shake, RMS (0.5 s drift removed) | **1.3 px** | **0.1 px** |
+| peak excursion | 11.7 px | 0.9 px |
+| largest single cursor step | 4 px | 1 px |
 
-### Part 2c — Algorithms, A/B tooling, tab UI + tuning  (in progress)
+| Stopping on a target | short hops | fast sweeps |
+|---|---|---|
+| approach speed | 1260 px/s | 5070 px/s |
+| settle to +/-2 px | **235 ms** median, 380 worst | 650 ms median, 1075 worst |
+| overshoot past target | none measurable | none measurable |
 
-Ends with: the best algorithm chosen + tuned on device, exposed in a Stabilization tab.
+One more independent check: while held, the reference cursor changes position only
+**6.2 times per second**, against 100 Hz while moving — most camera samples never
+accumulate a whole pixel. If ours twitches far more often than that at a matching
+RMS, it is too light regardless of what the RMS says.
 
-Done:
-- [x] Pivoted the filter accela → **Angle Mouse** (pixel-native per-event gain
-      multiplier; accela's velocity cap was wrong for pixel deltas).
-- [x] Added `speed`, `ewma`, `hybrid` algorithms (`TremorSettings.algorithm`); 29 tests.
-- [x] **A/B tooling**: `presets/tremor/{angle-mouse,speed,ewma,hybrid}-v1.json`
-      + `tools/tremor-preset.sh {list|save|apply}` (writes settings.json + relaunch).
-- [x] `NOTICES.md` cites Angle Mouse (Wobbrock, CHI 2009); accela removed.
-- [x] Testing setup: RustDesk **View Mode** (under the ⌨ menu) is required — the
-      user drives Windows via **SmartNav** (head tracker), so that input forwards
-      over RustDesk and fights the Mac's HeadMouse unless View Mode is on. Cleanest
-      is testing physically at the Mac (RustDesk video lag confounds "responsiveness").
+### Why this part was restarted
 
-Remaining:
-- [ ] **Run the on-device A/B** (View Mode on): compare hybrid / angleMouse /
-      speed / ewma; pick the best for head movement; watch for over-damping of
-      naturally-curvy head motion.
-- [ ] **Tune the winner** (strength/deadzone; for speed/hybrid the ~60/600 px/s
-      speed thresholds; for angle the sample distance/window). Save as default preset.
-- [ ] **Stabilization tab UI** (3rd tab): enable toggle + algorithm picker +
-      strength/deadzone (`StepperSlider`), live-apply.
-- [ ] **Commit.**
+Five filters were tried on-device and none was usable: fractional per-event gain
+(lost travel -> undershoot), a plain 1-euro low-pass (residual shake), a directional
+"intent" gate (hold-tremor reads as intentional, ratio ~0.72), a speed-gain curve
+(tremor and slow deliberate movement overlap in speed), and a 2nd-order low-pass with
+a dwell freeze (best of the five, still shaky and jerky).
 
----
+Analysing the two reference implementations settled it:
+
+- **Windows SmartNav (excellent)** links the whole of OpenCV into `SmartNAV.exe`
+  *solely* for `cvkalman` — create/predict/correct plus exactly the matrix ops that
+  file needs, and not one image-processing call. Its smoothing is a **Kalman filter**.
+  The user runs its Motion slider at 92% of range *together with* double the factory
+  speed, a combination no gain-scaling filter can offer.
+- **RJ Cooper's macOS port (unusable)** links no math at all and scales each delta by
+  its magnitude: 0.20 / 0.95 / 1.50 across abrupt breakpoints. A 7.5x gain swing means
+  the same head movement lands the cursor **somewhere different depending on how fast
+  you made it** — aiming is impossible in principle. And it had the raw sub-pixel
+  camera signal, so the gap is algorithmic, not a matter of signal quality.
+
+That also **rules out the amplitude-response curve** this plan previously named as the
+next idea: RJ Cooper ships precisely that.
+
+### Architecture
+
+An independent **alpha-beta filter** (steady-state constant-velocity Kalman) per axis,
+over the *accumulated position* of the incoming deltas; what we hand back is the change
+in the position estimate.
+
+- A position estimator, not a gain multiplier -> it arrives, exactly.
+- The velocity state extrapolates -> no lag on sustained movement.
+- Tremor and intent separate statistically, through the process/measurement noise
+  ratio, rather than by a threshold on speed, direction or amplitude — all three of
+  which were tried and none of which can separate held tremor from slow intent.
+
+One `smoothing` slider maps exponentially onto the noise ratio; the tracking index
+`lambda = noiseRatio * dt^2` is recomputed per event so a jittery event rate does not
+change the feel. `dt` comes from the CGEvent timestamp, never wall-clock. Both axes
+are exposed separately from the start — both reference tools do it, and the user
+genuinely runs a slower, calmer vertical.
+
+**Known risk, to be settled by measurement.** The velocity state that removes lag is
+the same thing that can carry the cursor **past** the target as you decelerate.
+Kalata's gains are optimal for *tracking* a manoeuvring target, not for *landing* on
+one, and the reference shows no measurable overshoot at all. If our overshoot is not
+essentially zero we decouple beta from alpha and damp harder than the textbook
+coupling gives.
+
+### Part 2a — Filter core
+
+- [ ] `AlphaBetaFilter` (one axis, Kalata gains, seeded by its first sample) and
+      `TremorFilter` (2-axis wrapper over accumulated position).
+- [ ] `TremorSettings { enabled, smoothing, verticalSmoothing, linkAxes, trace }`,
+      migrating the old `strength` key so an existing settings.json is not reset.
+- [ ] Delete the old `TremorFilter`, `OneEuroFilter`, the `algorithm` enum, the
+      `deadzone` (a hard dead zone caused stick-slip — confirmed on device) and the
+      stale presets. NOTICES cites Kalata instead of 1-euro / Angle Mouse.
+- [ ] Unit tests, led by the three that encode the failures: it arrives (endpoint
+      error zero), it does not lag sustained movement, it does not overshoot.
+
+A draft of all of this exists at `/home/oleg/projects/HeadmouseHelper-wip-kalman/`
+(written 2026-09-02, never compiled) — restore and adjust rather than retype.
+
+### Part 2b — Event tap  (done earlier, kept)
+
+`EventTapFilter` was validated on device; it only needs rewiring to the new filter.
+Accessibility persists via stable signing. Debug logging moves behind
+`TremorSettings.trace`, which also writes `~/hmh-trace.csv`.
+
+### Part 2c — Record our own traces
+
+Every previous attempt was judged by feel over RustDesk, which adds lag and makes
+"is that smoother?" unanswerable. Record instead:
+
+- [ ] Apply the `record-trace` preset and capture the same three phases on the
+      HeadMouse: hold still / sweep and stop / short hops.
+- [ ] Capture twice — with the Nano's rear speed switch off and on, compensating with
+      `PointerResolution` so the feel is unchanged. The device reports 8-bit deltas at
+      125 Hz, so look for a flat wall at the +/-127 clip, and check whether the finer
+      signal survives macOS's count-to-pixel rounding.
+- [ ] Commit the traces as fixtures, alongside the SmartNav reference traces.
+
+### Part 2d — Offline tuning against the numbers
+
+- [ ] Score candidate settings by replaying the fixtures in Core tests:
+      **endpoint error** (must be zero — the headline metric), **overshoot**,
+      **settle time to +/-2 px**, **residual shake RMS while held**, and update rate
+      while held. Compare against the table above.
+- [ ] Pick the winner on the numbers; only then confirm by feel on device.
+- [ ] Save it as the default preset.
+
+### Part 2e — Stabilization tab
+
+- [ ] Enable toggle, Smoothing slider, "Same for both axes", vertical slider,
+      live-apply. Drafted in the WIP directory; verify on device.
 
 ## Deferred / maybe later
 
