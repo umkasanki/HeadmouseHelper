@@ -51,6 +51,19 @@ public final class AlphaBetaFilter {
     /// of overshoot and a 5x slower settle, which is the worse trade.
     public var neverPassMeasurement: Bool = true
 
+    /// Only enforce `neverPassMeasurement` once the estimated speed exceeds this many
+    /// units per second. `0` enforces it always.
+    ///
+    /// The guard is what the cursor needs while travelling and what it does not need
+    /// while held. Holding still, the raw position jitters back and forth, so on every
+    /// reversal the estimate finds itself "ahead" and gets pulled back onto the raw
+    /// value — which is exactly where smoothing was supposed to be doing its work. On
+    /// device this put a hard floor under the residual shake: raising smoothing from
+    /// 0.6 to 0.8 changed nothing a user could feel. Gating the guard by speed leaves
+    /// it in charge during movement, where overshoot matters, and out of the way
+    /// during a hold, where it only reintroduces the jitter.
+    public var clampAboveSpeed: Double = 0
+
     private var x = 0.0
     private var v = 0.0
     private var seeded = false
@@ -100,7 +113,7 @@ public final class AlphaBetaFilter {
         x += alpha * residual
         v += (beta / dt) * residual
 
-        if neverPassMeasurement {
+        if neverPassMeasurement, abs(v) >= clampAboveSpeed {
             if v > 0, x > z {
                 x = z
                 v = 0

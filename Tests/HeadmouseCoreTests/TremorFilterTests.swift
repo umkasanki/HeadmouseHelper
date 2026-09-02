@@ -105,6 +105,30 @@ final class TremorFilterTests: XCTestCase {
         XCTAssertGreaterThan(overshoot, 50, "the guard is what keeps the cursor on target")
     }
 
+    /// Gating the guard by speed leaves it in charge of a real move but out of the way
+    /// of a hold, where it otherwise pins the estimate to the jittering raw position.
+    func testSpeedGateKeepsTheGuardForRealMovement() {
+        let f = TremorFilter()
+        f.configure(TremorSettings(enabled: true, smoothing: 0.6, clampAboveSpeed: 150))
+        let overshoot = approachAndStop(f).error.max() ?? 0
+        XCTAssertLessThanOrEqual(overshoot, 6.0, "a 1260 px/s approach is far above the gate, so the guard still holds")
+    }
+
+    func testSpeedGateStandsAsideWhileHolding() {
+        func residualShake(gate: Double) -> Double {
+            let f = TremorFilter()
+            f.configure(TremorSettings(enabled: true, smoothing: 0.8, clampAboveSpeed: gate))
+            var peak = 0.0
+            for i in 0 ..< 400 {
+                let out = f.process(dx: i.isMultiple(of: 2) ? 3 : -3, dy: 0, dt: dt).dx
+                if i > 200 { peak = max(peak, abs(out)) }
+            }
+            return peak
+        }
+        XCTAssertLessThan(residualShake(gate: 150), residualShake(gate: 0),
+                          "with the guard gated off at hold speeds, smoothing can actually do its work")
+    }
+
     // MARK: - Tremor suppression
 
     func testHoldJitterIsSmoothedAway() {

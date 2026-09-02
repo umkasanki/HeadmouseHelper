@@ -21,6 +21,13 @@ public struct TremorSettings: Codable, Equatable {
     /// When true, the vertical axis uses the horizontal value.
     public var linkAxes: Bool
 
+    /// Only guard against overshoot once the cursor is moving faster than this, in
+    /// px/s. `0` guards always. See `AlphaBetaFilter.clampAboveSpeed`: the guard is
+    /// needed while travelling and harmful while holding still, where it pulls the
+    /// estimate back onto the jittering raw position and puts a floor under the
+    /// residual shake.
+    public var clampAboveSpeed: Double
+
     /// Diagnostics: append every processed event to `~/hmh-trace.csv`, for recording
     /// the fixtures the offline tuning harness replays. Off in normal use.
     public var trace: Bool
@@ -35,12 +42,14 @@ public struct TremorSettings: Codable, Equatable {
         smoothing: Double = 0.6,
         verticalSmoothing: Double = 0.6,
         linkAxes: Bool = true,
+        clampAboveSpeed: Double = 0,
         trace: Bool = false
     ) {
         self.enabled = enabled
         self.smoothing = Self.clamp(smoothing)
         self.verticalSmoothing = Self.clamp(verticalSmoothing)
         self.linkAxes = linkAxes
+        self.clampAboveSpeed = max(0, clampAboveSpeed)
         self.trace = trace
     }
 
@@ -58,6 +67,7 @@ public struct TremorSettings: Codable, Equatable {
             try c.decodeIfPresent(Double.self, forKey: .verticalSmoothing) ?? smoothing
         )
         linkAxes = try c.decodeIfPresent(Bool.self, forKey: .linkAxes) ?? d.linkAxes
+        clampAboveSpeed = max(0, try c.decodeIfPresent(Double.self, forKey: .clampAboveSpeed) ?? d.clampAboveSpeed)
         trace = try c.decodeIfPresent(Bool.self, forKey: .trace) ?? d.trace
     }
 
@@ -67,11 +77,12 @@ public struct TremorSettings: Codable, Equatable {
         try c.encode(smoothing, forKey: .smoothing)
         try c.encode(verticalSmoothing, forKey: .verticalSmoothing)
         try c.encode(linkAxes, forKey: .linkAxes)
+        try c.encode(clampAboveSpeed, forKey: .clampAboveSpeed)
         try c.encode(trace, forKey: .trace)
     }
 
     private enum CodingKeys: String, CodingKey {
-        case enabled, smoothing, verticalSmoothing, linkAxes, trace
+        case enabled, smoothing, verticalSmoothing, linkAxes, clampAboveSpeed, trace
         case strength   // decode-only, migrated from older builds
     }
 

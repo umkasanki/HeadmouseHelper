@@ -233,6 +233,39 @@ A draft of all of this exists at `/home/oleg/projects/HeadmouseHelper-wip-kalman
 Accessibility persists via stable signing. Debug logging moves behind
 `TremorSettings.trace`, which also writes `~/hmh-trace.csv`.
 
+### On device, 2026-09-02 — first run of the real filter
+
+The filter was installed and switched on against the HeadMouse for the first time.
+Three findings, in order of surprise.
+
+**The velocity state fixed a problem we had not diagnosed.** Without the filter the
+user reported the cursor "sticking" and shaking badly; with it, "responds to head
+movement much better" and the sticking is "practically gone". That is not tremor
+suppression — it is quantization. At the pointer speed the user actually wants
+(resolution ~50), one device count lands about eight pixels away, so between counts
+the cursor stands still and then jumps. The alpha-beta filter's prediction step keeps
+moving the estimate between measurements, turning steps into continuous motion. We
+adopted the velocity state to avoid lag; it also repaired continuity.
+
+**Pointer speed had been the real complaint all along, and it was our bug.** With
+acceleration "disabled" the app was setting the device slower than macOS leaves it
+untouched — see the Movement commit. Fixed; the user settled on resolution ~49.6 with
+acceleration off, and no acceleration at all: they tried 2.5, then 1.0, and rejected
+both. Head control needs a fixed relationship between head movement and cursor
+distance, which is the same property the macOS port destroys.
+
+**The overshoot guard fights smoothing during a hold.** Raising smoothing 0.6 -> 0.8
+changed nothing the user could feel. Holding still, the raw position jitters back and
+forth, so on each reversal the estimate is "ahead" and `neverPassMeasurement` pulls it
+back onto the raw value — exactly where smoothing should be working. This morning's
+simulation showed only a mild cost (0.27 -> 0.38 px RMS) and the trade was dismissed;
+against real quantized, display-rate data it is the binding constraint. Hence
+`clampAboveSpeed`: enforce the guard only above a speed, so it rules movement and
+stands aside during a hold. Untested on device.
+
+**Next session starts here:** try `clampAboveSpeed` around 100-200 px/s at smoothing
+0.8, and see whether the residual shake finally moves.
+
 ### Part 2c — Record our own traces
 
 Every previous attempt was judged by feel over RustDesk, which adds lag and makes

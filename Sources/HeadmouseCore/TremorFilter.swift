@@ -52,6 +52,8 @@ public final class TremorFilter {
     public func configure(_ settings: TremorSettings) {
         filterX.noiseRatio = Self.noiseRatio(forSmoothing: settings.smoothing)
         filterY.noiseRatio = Self.noiseRatio(forSmoothing: settings.effectiveVerticalSmoothing)
+        filterX.clampAboveSpeed = settings.clampAboveSpeed
+        filterY.clampAboveSpeed = settings.clampAboveSpeed
     }
 
     public func reset() {
