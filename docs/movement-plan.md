@@ -102,24 +102,45 @@ either the one being clicked now or the one being approached next. Predictable
 ### Acceptance criteria (measured, not guessed)
 
 Captured from Windows SmartNav on 2026-09-02 at the user's own profile (Motion 111
-of 10-120, speed 13/12, 1920x1080). Traces are the fixtures for Part 2d.
+of 10-120, speed 13/12, 1920x1080), then re-derived a second way to check the numbers
+are properties of SmartNav and not of the analysis. Traces live in
+`traces/smartnav-windows/` and are the fixtures for Part 2d.
 
-| Holding still | horizontal | vertical |
+**Holding still.** Tremor is high-frequency and drift is low-frequency, so they must
+be separated by a stated corner frequency — subtracting a moving average instead makes
+the answer swing 20x with the window length, measuring mostly the user's own
+(intentional) drift. Physiological tremor sits around 4-12 Hz:
+
+| shake RMS above | horizontal | vertical |
 |---|---|---|
-| residual shake, RMS (0.5 s drift removed) | **1.3 px** | **0.1 px** |
-| peak excursion | 11.7 px | 0.9 px |
-| largest single cursor step | 4 px | 1 px |
+| 2 Hz | 1.82 px | 0.13 px |
+| **4 Hz** | **0.98 px** | **0.08 px** |
+| 8 Hz | 0.51 px | 0.04 px |
 
-| Stopping on a target | short hops | fast sweeps |
+Two window-free checks that need no corner at all: the largest single cursor step
+while held is **4 px horizontal, 1 px vertical**, and the cursor changes position only
+**6.2 times per second** while held against 100 Hz while moving — most camera samples
+never accumulate a whole pixel. If ours twitches far more often at a matching RMS, it
+is too light whatever the RMS says.
+
+**Note the 12x axis asymmetry.** Both axes run identical smoothing (111/111) and near
+identical speed, so this is the input, not the filter: this user's head shakes far
+more horizontally than vertically. It *contradicts* our own HeadMouse telemetry, where
+vertical looked worse (suspected device-side quantization). Both can be true — different
+device, different geometry. So do not hard-code which axis needs more smoothing; keep
+it adjustable, and re-measure per device.
+
+**Stopping on a target.**
+
+| | short hops | fast sweeps |
 |---|---|---|
 | approach speed | 1260 px/s | 5070 px/s |
-| settle to +/-2 px | **235 ms** median, 380 worst | 650 ms median, 1075 worst |
+| settle to +/-2 px | **235 ms** median, 380-505 ms p90 | 650 ms median, 1075 worst |
 | overshoot past target | none measurable | none measurable |
 
-One more independent check: while held, the reference cursor changes position only
-**6.2 times per second**, against 100 Hz while moving — most camera samples never
-accumulate a whole pixel. If ours twitches far more often than that at a matching
-RMS, it is too light regardless of what the RMS says.
+The 235 ms is robust: it reproduces at dwell thresholds of 30, 50 and 80 px/s, with
+only the number of detected stops changing. Loosening the tolerance to +/-3 or +/-5 px
+gives 155-210 ms, as expected.
 
 ### Why this part was restarted
 
@@ -196,8 +217,10 @@ Accessibility persists via stable signing. Debug logging moves behind
 Every previous attempt was judged by feel over RustDesk, which adds lag and makes
 "is that smoother?" unanswerable. Record instead:
 
-- [ ] Apply the `record-trace` preset and capture the same three phases on the
-      HeadMouse: hold still / sweep and stop / short hops.
+- [ ] Apply the `record-trace` preset and capture the same three tasks on the
+      HeadMouse: hold still / sweep and stop / short hops. **One task per recording,
+      never mixed** — blending them forces the analysis to guess segment boundaries,
+      which is why only 3 of 7 pauses in the SmartNav sweep run were usable.
 - [ ] Capture twice — with the Nano's rear speed switch off and on, compensating with
       `PointerResolution` so the feel is unchanged. The device reports 8-bit deltas at
       125 Hz, so look for a flat wall at the +/-127 clip, and check whether the finer
