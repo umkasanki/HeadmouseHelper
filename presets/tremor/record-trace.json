@@ -1,0 +1,7 @@
+{
+  "enabled": true,
+  "smoothing": 0.6,
+  "verticalSmoothing": 0.6,
+  "linkAxes": true,
+  "trace": true
+}

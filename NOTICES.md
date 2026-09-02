@@ -34,15 +34,17 @@ OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
 SOFTWARE.
 ```
 
-## One Euro Filter — algorithm citation
+## Tremor stabilization — algorithm citation
 
-The tremor-stabilization filter's `oneEuro` mode reimplements the **1€ Filter**
-from the paper:
+The Stabilization tab's filter is a steady-state constant-velocity Kalman filter,
+i.e. the classic **alpha-beta filter**. The gains are computed from the tracking
+index using the standard relation given in:
 
-> Casiez, G., Roussel, N. & Vogel, D. "1€ Filter: A Simple Speed-based Low-pass
-> Filter for Noisy Input in Interactive Systems." CHI 2012.
-> <https://gery.casiez.net/1euro/>
+> Kalata, P. R. "The Tracking Index: A Generalized Parameter for alpha-beta and
+> alpha-beta-gamma Target Trackers." IEEE Transactions on Aerospace and Electronic
+> Systems, AES-20(2), 1984.
 
-This is a published algorithm reimplemented from the paper — not third-party
-source code. (Earlier prototypes used opentrack's "accela" filter and the Angle
-Mouse technique; both were replaced and are no longer part of the app.)
+This is textbook estimation theory implemented from the mathematics — not
+third-party source code. (Earlier prototypes used opentrack's "accela" filter, the
+Angle Mouse technique and the 1-euro filter; all were replaced and none remain in
+the app.)
