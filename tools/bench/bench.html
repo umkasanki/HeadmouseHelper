@@ -1,0 +1,162 @@
+<meta charset="utf-8">
+<title>Cursor bench</title>
+<style>
+  html,body{margin:0;height:100%;background:#101014;color:#e8e8ea;
+    font:15px/1.5 -apple-system,Segoe UI,system-ui,sans-serif;overflow:hidden;cursor:crosshair}
+  #stage{position:absolute;inset:0}
+  .t{position:absolute;border-radius:50%;background:#2b6cb0;border:2px solid #90cdf4;
+    transform:translate(-50%,-50%);display:flex;align-items:center;justify-content:center;
+    color:#fff;font-weight:500;user-select:none}
+  .t.next{background:#276749;border-color:#9ae6b4}
+  .t.hold{background:#744210;border-color:#f6e05e}
+  #hud{position:absolute;left:50%;top:24px;transform:translateX(-50%);text-align:center;
+    background:#1c1c22;border:1px solid #33333d;border-radius:10px;padding:14px 22px;max-width:760px}
+  #title{font-size:19px;font-weight:500}
+  #sub{color:#a0a0aa;margin-top:4px}
+  #prog{color:#71717a;margin-top:8px;font-size:13px}
+  button{font:inherit;padding:10px 20px;margin-top:12px;border-radius:8px;
+    border:1px solid #4a4a58;background:#26262e;color:#e8e8ea;cursor:pointer}
+  button:hover{background:#33333d}
+  #bar{height:5px;background:#26262e;border-radius:3px;margin-top:12px;overflow:hidden}
+  #fill{height:100%;width:0;background:#48bb78}
+</style>
+<div id="stage"></div>
+<div id="hud">
+  <div id="title">Стенд измерения курсора</div>
+  <div id="sub">Задания идут одно за другим. Между ними можно отдыхать сколько нужно.</div>
+  <div id="prog"></div>
+  <div id="bar" style="display:none"><div id="fill"></div></div>
+  <button id="go">Начать</button>
+</div>
+<script>
+var stage = document.getElementById('stage'), hud = {
+  title: document.getElementById('title'), sub: document.getElementById('sub'),
+  prog: document.getElementById('prog'), go: document.getElementById('go'),
+  bar: document.getElementById('bar'), fill: document.getElementById('fill')
+};
+var moves = [], events = [], t0 = performance.now();
+
+function log(type, extra) {
+  var e = { t: +(performance.now() - t0).toFixed(1), type: type };
+  for (var k in extra) e[k] = extra[k];
+  events.push(e);
+}
+function rec(ev) {
+  moves.push([+(ev.timeStamp - t0).toFixed(1), ev.clientX, ev.clientY, ev.screenX, ev.screenY]);
+}
+window.addEventListener('pointermove', function (ev) {
+  if (ev.getCoalescedEvents) {
+    var cs = ev.getCoalescedEvents();
+    if (cs.length) { for (var i = 0; i < cs.length; i++) rec(cs[i]); return; }
+  }
+  rec(ev);
+}, { passive: true });
+
+function target(x, y, r, cls, label) {
+  var d = document.createElement('div');
+  d.className = 't ' + (cls || '');
+  d.style.left = x + 'px'; d.style.top = y + 'px';
+  d.style.width = d.style.height = (r * 2) + 'px';
+  if (label) d.textContent = label;
+  stage.appendChild(d);
+  return d;
+}
+function clear() { stage.innerHTML = ''; }
+function show(title, sub, prog) {
+  hud.title.textContent = title; hud.sub.textContent = sub || '';
+  hud.prog.textContent = prog || '';
+}
+
+var W = innerWidth, H = innerHeight;
+
+function taskHold(done) {
+  clear();
+  var SEC = 25, x = W / 2, y = H * 0.62, r = 26;
+  var t = target(x, y, r, 'hold');
+  show('1. Удержание', 'Наведите курсор в жёлтый круг, нажмите на него — и дальше не двигайтесь.',
+       'Запись начнётся по клику и продлится ' + SEC + ' секунд.');
+  hud.go.style.display = 'none';
+  t.onclick = function (ev) {
+    t.onclick = null;
+    log('hold_start', { x: x, y: y, r: r, clickX: ev.clientX, clickY: ev.clientY });
+    show('1. Удержание — идёт запись', 'Смотрите в одну точку. Не двигайтесь.', '');
+    hud.bar.style.display = 'block';
+    var s = performance.now();
+    var iv = setInterval(function () {
+      var p = (performance.now() - s) / (SEC * 1000);
+      hud.fill.style.width = Math.min(100, p * 100) + '%';
+      if (p >= 1) {
+        clearInterval(iv); hud.bar.style.display = 'none'; hud.fill.style.width = '0';
+        log('hold_end', {}); done();
+      }
+    }, 100);
+  };
+}
+
+function taskPairs(name, label, ax, ay, bx, by, r, reps, done) {
+  clear();
+  var A = target(ax, ay, r, '', 'A'), B = target(bx, by, r, '', 'B');
+  var n = 0, cur = A, other = B;
+  show(label, 'Нажимайте по очереди на подсвеченный круг. Работайте в привычном темпе.',
+       'Осталось нажатий: ' + reps);
+  hud.go.style.display = 'none';
+  function arm() {
+    A.className = 't'; B.className = 't';
+    cur.className = 't next';
+    log('target_on', { task: name, i: n, x: cur === A ? ax : bx, y: cur === A ? ay : by, r: r });
+  }
+  function onDown(ev) {
+    var tx = cur === A ? ax : bx, ty = cur === A ? ay : by;
+    var hit = Math.hypot(ev.clientX - tx, ev.clientY - ty) <= r;
+    log('click', { task: name, i: n, x: ev.clientX, y: ev.clientY, tx: tx, ty: ty, r: r, hit: hit });
+    if (!hit) return;
+    n++;
+    if (n >= reps) { A.onmousedown = B.onmousedown = null; log('task_end', { task: name }); done(); return; }
+    var tmp = cur; cur = other; other = tmp;
+    hud.prog.textContent = 'Осталось нажатий: ' + (reps - n);
+    arm();
+  }
+  stage.onmousedown = onDown;
+  arm();
+}
+
+var queue = [
+  function (d) { taskHold(d); },
+  function (d) { taskPairs('hops', '2. Короткие переходы', W / 2 - 160, H * 0.6, W / 2 + 160, H * 0.6, 24, 12, d); },
+  function (d) { taskPairs('sweeps', '3. Броски', 90, 110, W - 90, H - 110, 30, 10, d); },
+  function (d) { taskPairs('precision', '4. Точность', W / 2 - 240, H * 0.55, W / 2 + 240, H * 0.55, 11, 10, d); }
+];
+
+function next(i) {
+  if (i >= queue.length) { finish(); return; }
+  var pause = document.createElement('div');
+  clear(); stage.onmousedown = null;
+  show('Задание ' + (i + 1) + ' из ' + queue.length, 'Отдохните, сколько нужно.', '');
+  hud.go.textContent = 'Готов, начинаем';
+  hud.go.style.display = '';
+  hud.go.onclick = function () { hud.go.style.display = 'none'; log('phase', { i: i }); queue[i](function () { next(i + 1); }); };
+}
+
+function finish() {
+  clear(); stage.onmousedown = null;
+  var data = {
+    meta: {
+      screen: [screen.width, screen.height], viewport: [W, H],
+      dpr: devicePixelRatio, ua: navigator.userAgent, when: new Date().toISOString()
+    },
+    events: events, moves: moves
+  };
+  var blob = new Blob([JSON.stringify(data)], { type: 'application/json' });
+  var a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = 'bench-' + Date.now() + '.json';
+  show('Готово', 'Файл сохраняется в папку «Загрузки». Отправьте в чат, что закончили.',
+       moves.length + ' точек движения, ' + events.length + ' событий');
+  hud.go.textContent = 'Сохранить файл ещё раз';
+  hud.go.style.display = '';
+  hud.go.onclick = function () { a.click(); };
+  a.click();
+}
+
+hud.go.onclick = function () { hud.go.style.display = 'none'; next(0); };
+</script>
