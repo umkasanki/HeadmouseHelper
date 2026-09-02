@@ -123,12 +123,17 @@ while held is **4 px horizontal, 1 px vertical**, and the cursor changes positio
 never accumulate a whole pixel. If ours twitches far more often at a matching RMS, it
 is too light whatever the RMS says.
 
-**Note the 12x axis asymmetry.** Both axes run identical smoothing (111/111) and near
-identical speed, so this is the input, not the filter: this user's head shakes far
-more horizontally than vertically. It *contradicts* our own HeadMouse telemetry, where
-vertical looked worse (suspected device-side quantization). Both can be true — different
-device, different geometry. So do not hard-code which axis needs more smoothing; keep
-it adjustable, and re-measure per device.
+**No stable axis asymmetry — an earlier claim here is withdrawn.** The first capture showed 12x more
+shake horizontally; a second capture through the bench showed 3x more *vertically* (X 0.33 px,
+Y 1.08 px above 4 Hz). The magnitude reproduces, the split does not: it is just where the head
+happened to drift in that particular half-minute. So take the criterion as **roughly a pixel above
+4 Hz on either axis**, never build anything around a "noisy axis", and keep per-axis smoothing
+adjustable so it can be set per device and per user.
+
+**Rule learned the hard way, twice in one day:** a single capture of this signal proves nothing. The
+"1.31 px RMS" figure was an artefact of the detrend window; the axis asymmetry was an artefact of the
+sample. **Every criterion must reproduce in at least two independent recordings before it is treated
+as one.**
 
 **Stopping on a target.**
 
@@ -184,12 +189,28 @@ change the feel. `dt` comes from the CGEvent timestamp, never wall-clock. Both a
 are exposed separately from the start — both reference tools do it, and the user
 genuinely runs a slower, calmer vertical.
 
-**Known risk, to be settled by measurement.** The velocity state that removes lag is
-the same thing that can carry the cursor **past** the target as you decelerate.
-Kalata's gains are optimal for *tracking* a manoeuvring target, not for *landing* on
-one, and the reference shows no measurable overshoot at all. If our overshoot is not
-essentially zero we decouple beta from alpha and damp harder than the textbook
-coupling gives.
+**The overshoot risk is now settled, and it disqualifies the textbook filter.** Simulated against a
+1260 px/s approach, plain alpha-beta with Kalata gains overshoots the target by **88 px** at
+smoothing 0.6 (350 px on a fast sweep), and gentler deceleration does not help — 74 px even when the
+head takes 400 ms to stop. The reference overshoots by **nothing at all**: across 32 instrumented
+trials on the bench, the cursor entered the target circle and stayed inside it, every time.
+
+So the velocity state cannot be trusted the way the textbook gains trust it. Three candidates, to be
+chosen by measurement, not argument:
+
+1. **Clamp** — the estimate may lag the measurement but never pass it. Simulates to zero overshoot,
+   zero endpoint error, and settling in 8-184 ms. Needs checking for whether the clamp reintroduces
+   shake while holding, since it binds on every jitter excursion.
+2. **Weak velocity** — beta scaled down 10-20x. Overshoot falls to 14-26 px but settling degrades.
+3. **No velocity at all** (beta = 0) — which reduces to a first-order low-pass over accumulated
+   position. Zero overshoot, settles in 408 ms, at the cost of lag proportional to speed.
+
+Candidate 3 deserves more respect than this plan first gave it. The premise was "the velocity state
+removes lag, and lag is the enemy" — but the macOS port's failure was never lag, it was
+*unpredictability*. A low-pass lags consistently, and a human in a closed loop adapts to consistent
+lag within a day. A magnitude-keyed gain curve cannot be adapted to at all. And the reference's own
+numbers fit a low-pass well: it dwells 300-550 ms on a target before clicking, against the 408 ms
+that candidate 3 simulates.
 
 ### Part 2a — Filter core
 
